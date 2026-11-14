@@ -28,11 +28,18 @@ python3 scripts/write_runtime_env.py "$deploy_root/bot.env.next"
 export BOT_ENV_FILE="$deploy_root/bot.env.next"
 docker compose -f deploy/compose.yml config --quiet
 
+# Update the restricted host service before deploying a client that may need it.
+# The administrator installs this fixed, no-argument updater once.
+sudo -n /opt/mcwl-control/update_control.py < deploy/server_control.py
+
 # Keep the last successful deployment for explicit manual rollback.
 if [[ -f "$deploy_root/current-image" ]]; then
   cp "$deploy_root/current-image" "$deploy_root/previous-image"
   cp "$deploy_root/current-compose.yml" "$deploy_root/previous-compose.yml"
   cp "$deploy_root/current-bot.env" "$deploy_root/previous-bot.env"
+  if [[ -f "$deploy_root/current-helper.py" ]]; then
+    cp "$deploy_root/current-helper.py" "$deploy_root/previous-helper.py"
+  fi
 fi
 mv "$deploy_root/bot.env.next" "$deploy_root/bot.env"
 install -m 600 deploy/compose.yml "$deploy_root/compose.yml"
@@ -47,7 +54,8 @@ if [[ -z "$container_id" ]] || \
   echo 'Deployment failed its process-liveness check. Inspect the service over SSH and use the documented rollback.' >&2
   exit 1
 fi
+cp deploy/server_control.py "$deploy_root/current-helper.py"
 cp "$deploy_root/compose.yml" "$deploy_root/current-compose.yml"
 cp "$deploy_root/bot.env" "$deploy_root/current-bot.env"
 printf '%s\n' "$MCWL_IMAGE" > "$deploy_root/current-image"
-echo 'Deployment completed. Verify /start in an allowed Telegram chat.'
+echo 'Deployment completed. Verify /help in an allowed Telegram chat.'

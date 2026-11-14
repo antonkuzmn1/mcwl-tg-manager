@@ -33,6 +33,8 @@ jobs:
       - name: Check deployment syntax
         run: |
           bash -n scripts/deploy.sh
+          python -m py_compile deploy/update_control.py
+          sudo visudo -cf deploy/mcwl-control.sudoers
           CONTROL_GID=999 MCWL_IMAGE=mcwl-tg-manager:test BOT_ENV_FILE=/dev/null docker compose -f deploy/compose.yml config --quiet
           git diff --check
 

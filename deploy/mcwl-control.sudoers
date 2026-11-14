@@ -1,0 +1,2 @@
+# The updater is root-owned, takes no arguments, and reads helper source on stdin.
+github-runner ALL=(root) NOPASSWD: /opt/mcwl-control/update_control.py ""

@@ -110,3 +110,9 @@ Acceptance: offline tests and workflow lint pass; Docker configuration validates
 - [x] Document local/CI commands, first deployment, logs, and manual rollback.
 
 Acceptance: CI runs without Telegram or Minecraft credentials and checks the same behavior as local tests.
+
+## 5.1. Automatic host-helper updates — complete; one-time VM setup pending
+
+Scope: install a root-owned, no-argument updater once; allow the runner to submit helper source on stdin through this fixed sudo command. Deploy the tested helper before replacing the bot, skip unchanged files, and restore the prior helper if restart/readiness fails. Keep the unit and updater under manual administrator control.
+
+Acceptance: reject invalid/oversized source and arguments before mutation; replace the fixed helper path atomically; verify service/socket readiness; roll back failed updates; abort bot replacement on updater failure. Cover these paths offline and document one-time installation, privilege scope, and paired rollback. Do not contact the VM.

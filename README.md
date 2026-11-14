@@ -71,7 +71,7 @@ Tests use synthetic updates and mocked Telegram requests. They do not need real 
 
 Both support `@YourBotUsername` in groups and accept no arguments. Every participant in an allowed administrator chat can use them, including anonymous administrators. Authorization is based only on `TELEGRAM_ALLOWED_CHAT_IDS`; commands from other chats are silently ignored.
 
-The bot talks asynchronously to a host helper over `/var/lib/mcwl-control/control.sock`. The helper accepts only start/stop and read-only readiness checks for `mc`; the bot has no access to the Docker API socket, arbitrary shell commands, container creation/removal, or other containers. Install the helper using [the deployment guide](docs/DEPLOYMENT.md#5a-install-the-restricted-server-control-helper) before deploying this version. The bot container needs the helper directory bind mount and its group ID; the deployment script detects the group automatically.
+The bot talks asynchronously to a host helper over `/var/lib/mcwl-control/control.sock`. The helper accepts only start/stop, whitelist operations, and read-only readiness checks for `mc`; the bot has no access to the Docker API socket, arbitrary shell commands, container creation/removal, or other containers. Install the helper using [the deployment guide](docs/DEPLOYMENT.md#5a-install-the-restricted-server-control-helper) before deploying this version. The bot container needs the helper directory bind mount and its group ID; the deployment script detects the group automatically.
 
 The Minecraft container must already exist on the same VM under the exact name `mc`. Create it once using your existing Compose file (`docker compose up -d mc`). The bot can start a stopped container, but cannot recreate one removed with `docker compose down`. After a successful start, the bot waits for Minecraft readiness before announcing that players can join. Repeated requests report an already-running/stopped state; overlapping operations are rejected. Docker failures and timeouts produce operator-facing messages.
 
@@ -79,7 +79,7 @@ After `/server_start`, the bot sends a Russian loading message, then waits async
 
 Stop progress, successful stop, already-stopped, and stop failure replies are Russian. A final Russian message confirms readiness in the requesting chat. Timeout, exit, or restart produces a failure message instead. This confirms the Paper startup marker, not external network reachability. Retain the current run's startup logs; if those logs have been rotated away, readiness cannot be confirmed from them. Notifications follow `/server_start` requests; there is no continuous monitor for external starts, and pending notifications are not persisted across bot/helper restarts.
 
-**Upgrade requirement:** update the root-owned host helper using [the readiness upgrade procedure](docs/DEPLOYMENT.md#updating-the-helper-for-readiness-notifications) before deploying this bot version. The new protocol adds `wait_ready`; an old helper will reject it. No new credentials or systemd unit changes are needed.
+**Helper updates:** enable [automatic helper updates](docs/DEPLOYMENT.md#5b-enable-automatic-helper-updates-one-time-setup) once. CI then installs the helper before replacing the bot. Unit and updater changes remain administrator-managed. The manual readiness upgrade procedure remains available in the deployment guide.
 
 No RCON connection is required for these commands. Your Minecraft Compose file can stay as shown; optionally add `stop_grace_period: 120s` under `mc` for a similar grace period when stopping it manually through Compose. Docker's `unless-stopped` policy respects an explicit stop until the container is started again.
 
@@ -95,7 +95,7 @@ Minecraft must be running, with RCON enabled and the packaged `rcon-cli` working
 
 The helper recognizes standard English Vanilla/Paper whitelist responses, including already-listed/not-listed cases. It does not treat a zero CLI exit code as proof of a successful Minecraft command. Unexpected/plugin-modified responses fail without reporting success or forwarding raw diagnostics; inspect `/wl_list` before retrying a mutation whose result is uncertain. Changes use the server's native whitelist commands, which update its in-memory and persistent whitelist; the bot does not edit whitelist.json or calculate UUIDs itself.
 
-**Upgrade requirement:** manually install the updated host helper using [the whitelist upgrade procedure](docs/DEPLOYMENT.md#updating-the-helper-for-whitelist-commands) before deploying this bot version. An old helper will reject the new operations. Do not configure a conflicting startup `WHITELIST` source that overwrites runtime changes unless that behavior is intended.
+**Upgrade requirement:** enable automatic helper updates or use [the manual whitelist upgrade procedure](docs/DEPLOYMENT.md#updating-the-helper-for-whitelist-commands). An old helper will reject the new operations. Do not configure a conflicting startup `WHITELIST` source that overwrites runtime changes unless that behavior is intended.
 
 With `ONLINE_MODE=FALSE`, the whitelist does not authenticate account ownership. Use the player's exact nickname/case and check access from the intended client; no Telegram command changes that Minecraft identity model.
 
@@ -107,7 +107,7 @@ The CI/CD workflow runs offline tests on GitHub-hosted runners with Python 3.12 
 
 Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` as a production environment variable. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
 
-Runtime secrets stay outside the checkout and image. The deployment validates configuration before replacing the service and checks process liveness afterward; verify actual Telegram connectivity with `/help` manually.
+Runtime secrets stay outside the checkout and image. The deployment validates configuration, updates the host helper through a fixed root-owned updater with rollback on helper startup failure, then replaces the bot and checks process liveness afterward; verify actual Telegram connectivity with `/help` manually.
 
 ## Project structure
 

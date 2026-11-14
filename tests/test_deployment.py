@@ -46,7 +46,7 @@ class RuntimeEnvironmentTests(unittest.TestCase):
 
 
 class DeploymentFlowTests(unittest.TestCase):
-    def run_deploy(self, directory, validation_status=0):
+    def run_deploy(self, directory, validation_status=0, helper_status=0):
         import subprocess
         import sys
 
@@ -68,6 +68,13 @@ if [ "$1" = compose ]; then
 fi
 ''')
         docker.chmod(0o755)
+        sudo = binaries / "sudo"
+        sudo.write_text('''#!/bin/sh
+[ "$*" = '-n /opt/mcwl-control/update_control.py' ] || exit 99
+cat > "$HOME/submitted-helper"
+exit "${HELPER_STATUS:-0}"
+''')
+        sudo.chmod(0o755)
         for command in ("flock", "sleep"):
             path = binaries / command
             path.write_text("#!/bin/sh\nexit 0\n")
@@ -76,7 +83,7 @@ fi
         python.symlink_to(sys.executable)
         env = dict(os.environ, HOME=str(root), PATH=f"{binaries}:{os.environ['PATH']}",
                    MCWL_IMAGE="mcwl-tg-manager:new", TELEGRAM_BOT_TOKEN="123:test-token",
-                   TELEGRAM_ALLOWED_CHAT_IDS="42", CONTROL_GID="999", VALIDATION_STATUS=str(validation_status))
+                   TELEGRAM_ALLOWED_CHAT_IDS="42", CONTROL_GID="999", VALIDATION_STATUS=str(validation_status), HELPER_STATUS=str(helper_status))
         return subprocess.run(["bash", "scripts/deploy.sh"], env=env,
                               cwd=Path(__file__).resolve().parents[1],
                               capture_output=True, text=True)
@@ -108,3 +115,15 @@ fi
             self.assertEqual((root / "current-image").read_text().strip(), "mcwl-tg-manager:new")
             self.assertEqual((root / "current-bot.env").read_text(), (root / "bot.env").read_text())
             self.assertNotIn("test-token", result.stdout + result.stderr)
+
+    def test_helper_failure_aborts_before_bot_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "apps/mcwl-tg-manager"
+            root.mkdir(parents=True)
+            (root / "bot.env").write_text("unchanged")
+            result = self.run_deploy(directory, helper_status=1)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual((root / "bot.env").read_text(), "unchanged")
+            self.assertFalse((root / "current-image").exists())
+            self.assertEqual((Path(directory) / "submitted-helper").read_bytes(),
+                             (Path(__file__).resolve().parents[1] / "deploy/server_control.py").read_bytes())

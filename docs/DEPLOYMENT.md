@@ -4,7 +4,7 @@
 
 These instructions assume a private repository, an Ubuntu 24.04/22.04 VM (or a compatible Debian system), systemd, SSH key access, and an administrator with sudo. The repository is https://github.com/antonkuzmn1/mcwl-tg-manager. Replace example hostnames and local SSH key paths with your own values.
 
-The workflow in `.github/workflows/pipeline.yml` runs offline tests on GitHub-hosted Ubuntu with Python 3.12 and 3.14 for pull requests, pushes to main, and manual runs. Only a push/manual run on main can deploy, and both test jobs must pass first. The deploy job runs on the VM, builds a local Docker image tagged with the tested commit, and replaces the bot through Compose. There is no container registry or SSH connection from GitHub.
+The workflow in `.github/workflows/pipeline.yml` runs offline tests on GitHub-hosted Ubuntu with Python 3.12 and 3.14 for pull requests, pushes to main, and manual runs. Only a push/manual run on main can deploy, and both test jobs must pass first. The deploy job runs on the VM, builds a local Docker image tagged with the tested commit, updates the host helper, and replaces the bot through Compose. There is no container registry or SSH connection from GitHub.
 
 The runner initiates outbound HTTPS connections to GitHub. Keep SSH key authentication for your own administration; do not upload your private SSH key to GitHub. The bot also needs outbound HTTPS access to Telegram. The runner, bot, and Docker image downloads require DNS and outbound access; no extra inbound ports are required.
 
@@ -167,11 +167,39 @@ Do not run that command in the bot deployment directory. The helper cannot creat
 
 After deployment, try `/server_start` or `/server_stop` in an allowed chat. The bot reports loading first and sends a Russian ready notification only after the current run emits its Paper Done marker. Readiness waits up to five minutes, checks for stop/restart, and leaves /server_stop available during loading. Stop allows graceful shutdown for up to 120 seconds, after which Docker can force termination. Only one operation runs at a time; after a timeout the daemon may still finish the operation, so inspect state before trying again.
 
-When a future change modifies the host helper or unit, reinstall the reviewed files using the commands above and run `sudo systemctl restart mcwl-control`. Ordinary bot deployments do not overwrite the root-owned helper or restart Minecraft. Inspect helper logs privately using `sudo journalctl -u mcwl-control -n 100 --no-pager`.
+After the one-time automation setup below, deployments update the helper automatically. Changes to the systemd unit or privileged updater still require administrator installation. Deployments do not restart Minecraft. Inspect helper logs privately using `sudo journalctl -u mcwl-control -n 100 --no-pager`.
+
+## 5b. Enable automatic helper updates (one-time setup)
+
+Existing installations must complete this step before the next deployment. On your computer, from the project root, upload the updater and sudo rule using your existing SSH key (replace the key path and VM address):
+
+```sh
+ssh -i ~/.ssh/YOUR_VM_KEY anton@YOUR_VM_IP 'mkdir -p /home/anton/mcwl-control-setup'
+scp -i ~/.ssh/YOUR_VM_KEY deploy/update_control.py deploy/mcwl-control.sudoers anton@YOUR_VM_IP:/home/anton/mcwl-control-setup/
+```
+
+On the VM, as `anton`:
+
+```sh
+sudo install -d -o root -g root -m 755 /opt/mcwl-control
+sudo install -o root -g root -m 755 /home/anton/mcwl-control-setup/update_control.py /opt/mcwl-control/update_control.py
+sudo visudo -cf /home/anton/mcwl-control-setup/mcwl-control.sudoers
+sudo install -o root -g root -m 440 /home/anton/mcwl-control-setup/mcwl-control.sudoers /etc/sudoers.d/mcwl-control
+sudo visudo -c
+sudo -u github-runner sudo -n -l
+```
+
+The final listing should include `/opt/mcwl-control/update_control.py` with no arguments. The helper and unit from step 5a must already exist. No new GitHub secrets or variables are required. Push main from your computer or rerun the main workflow after this setup.
+
+The root-owned updater runs isolated system Python (`-I`), accepts bounded Python source on stdin, checks syntax without executing it as root, and atomically replaces only `/opt/mcwl-control/server_control.py`. It restarts only `mcwl-control.service`, which still runs as `github-runner`, and waits for an active service and connectable control socket. The sudo rule grants this exact no-argument command, not general installation or systemctl access. The runner can now deploy helper code with the helper service account's existing Docker privileges; protect main and production deployment access accordingly. The bot still receives only the restricted socket.
+
+Unchanged source is checked for readiness without a restart. Failed restart/readiness restores the prior source and attempts to restart it; the deployment fails before replacing the bot. Recovery failure also fails the job and requires operator intervention. Updates interrupt pending helper requests, so deploy when no server operation is in progress. A later bot deployment failure leaves the successfully updated helper in place; use the paired manual rollback below if needed. The updater's final error is intentionally generic: inspect `sudo journalctl -u mcwl-control -n 100 --no-pager` and `sudo systemctl status mcwl-control --no-pager`.
+
+The updater and sudo rule are not self-updated by CI. Future changes to those files or the systemd unit require repeating the relevant administrator installation steps.
 
 ## Updating the helper for readiness notifications
 
-Existing installations must update `server_control.py` before deploying the bot with readiness support. The bot calls the new read-only `wait_ready` operation; an older helper only understands start/stop. No new secrets or systemd unit changes are required.
+With automatic updates enabled in step 5b, CI installs the required helper before the bot. The following is the manual alternative for installations without automation. Existing installations must update `server_control.py` before deploying the bot with readiness support. The bot calls the new read-only `wait_ready` operation; an older helper only understands start/stop. No new secrets or systemd unit changes are required.
 
 On your local computer, from the project root:
 
@@ -192,6 +220,8 @@ Then push the bot update or run the normal main deployment workflow. In an allow
 The helper reads only mc's logs since Docker StartedAt, checks container identity/start time around each read, and does not return logs to Telegram. The maximum readiness wait is five minutes with three-second polling; a stop or restart cancels confirmation. Startup logs must remain available. A timeout does not stop Minecraft, which may still finish loading later. This notification confirms the Paper startup marker, not external connectivity, and is triggered only by /server_start. Pending notifications are not persisted if the bot/helper restarts.
 
 ## Updating the helper for whitelist commands
+
+With step 5b enabled, CI performs this update automatically. The commands below remain a manual alternative.
 
 Install the updated `deploy/server_control.py` before deploying the bot that adds /wl_list, /wl_add, and /wl_remove. The systemd unit, bot secrets, and Compose mounts do not change. On your local computer, from the project root:
 
@@ -291,14 +321,22 @@ flock -w 120 9
 export MCWL_IMAGE="$(cat previous-image)"
 export BOT_ENV_FILE="$PWD/previous-bot.env"
 export CONTROL_GID="$(stat -c '%g' /var/lib/mcwl-control)"
+if [ -f previous-helper.py ]; then
+  sudo -n /opt/mcwl-control/update_control.py < previous-helper.py
+fi
 docker compose -f previous-compose.yml up -d --wait --wait-timeout 60
 cp previous-compose.yml compose.yml
 cp previous-bot.env bot.env
 cp previous-compose.yml current-compose.yml
 cp previous-bot.env current-bot.env
 cp previous-image current-image
+if [ -f previous-helper.py ]; then
+  cp previous-helper.py current-helper.py
+fi
 flock -u 9
 ```
+
+Helper snapshots are recorded by automated deployments as current-helper.py and previous-helper.py. The first deployment after enabling automation cannot snapshot the helper from an earlier manual deployment: if a paired rollback needs that older helper, recover deploy/server_control.py from the matching Git revision and submit it through the installed updater before restoring the bot. Unit/updater changes require separate administrator rollback.
 
 These files exist only after a successful deployment has been replaced or a later deployment has been attempted. On a failed first deployment there is no previous version: fix configuration/code and rerun. Review logs and test `/start` after rollback. If the previous token has been revoked, supply its replacement via GitHub and redeploy instead.
 
