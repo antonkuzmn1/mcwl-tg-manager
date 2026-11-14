@@ -26,23 +26,9 @@ class RuntimeEnvironmentTests(unittest.TestCase):
             }, clear=True):
                 module.write_runtime_env(destination)
             self.assertEqual(destination.read_text(),
-                             "TELEGRAM_BOT_TOKEN=123:test-token\nTELEGRAM_ALLOWED_CHAT_IDS=-42, 123\nTELEGRAM_ADMIN_USER_IDS=\n")
+                             "TELEGRAM_BOT_TOKEN=123:test-token\nTELEGRAM_ALLOWED_CHAT_IDS=-42, 123\n")
             self.assertEqual(stat.S_IMODE(destination.stat().st_mode), 0o600)
             self.assertEqual(list(Path(directory).iterdir()), [destination])
-
-    def test_admin_ids_are_included_and_multiline_values_are_rejected(self):
-        with tempfile.TemporaryDirectory() as directory:
-            destination = Path(directory) / "bot.env"
-            env = {"TELEGRAM_BOT_TOKEN": "123:test-token", "TELEGRAM_ALLOWED_CHAT_IDS": "42",
-                   "TELEGRAM_ADMIN_USER_IDS": "42,99"}
-            with patch.dict(os.environ, env, clear=True):
-                module.write_runtime_env(destination)
-            self.assertIn("TELEGRAM_ADMIN_USER_IDS=42,99\n", destination.read_text())
-            previous = destination.read_text()
-            with patch.dict(os.environ, dict(env, TELEGRAM_ADMIN_USER_IDS="42\nINJECTED=value"), clear=True):
-                with self.assertRaisesRegex(ValueError, "TELEGRAM_ADMIN_USER_IDS"):
-                    module.write_runtime_env(destination)
-            self.assertEqual(destination.read_text(), previous)
 
     def test_invalid_values_do_not_overwrite_existing_file_or_leak(self):
         for value in ("", "secret\nINJECTED=value", "secret\rvalue", None):
@@ -90,7 +76,7 @@ fi
         python.symlink_to(sys.executable)
         env = dict(os.environ, HOME=str(root), PATH=f"{binaries}:{os.environ['PATH']}",
                    MCWL_IMAGE="mcwl-tg-manager:new", TELEGRAM_BOT_TOKEN="123:test-token",
-                   TELEGRAM_ALLOWED_CHAT_IDS="42", TELEGRAM_ADMIN_USER_IDS="42", CONTROL_GID="999", VALIDATION_STATUS=str(validation_status))
+                   TELEGRAM_ALLOWED_CHAT_IDS="42", CONTROL_GID="999", VALIDATION_STATUS=str(validation_status))
         return subprocess.run(["bash", "scripts/deploy.sh"], env=env,
                               cwd=Path(__file__).resolve().parents[1],
                               capture_output=True, text=True)

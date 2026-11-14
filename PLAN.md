@@ -25,15 +25,21 @@ Acceptance: configured private, group, and supergroup chats receive replies; oth
 
 ## 0.3. Server lifecycle commands — complete; host setup pending
 
-Scope: add /server_start and /server_stop for the existing Docker container named mc. Require both an allowed chat and an explicitly configured TELEGRAM_ADMIN_USER_IDS sender. Empty admin configuration disables privileged commands. Use an asynchronous client for a restricted host helper with only two fixed Docker CLI operations; never accept container names or arbitrary commands from Telegram.
+Scope: add /server_start and /server_stop for the existing Docker container named mc. Require an allowed administrator chat; all its participants are authorized. Use an asynchronous client for a restricted host helper with only two fixed Docker CLI operations; never accept container names or arbitrary commands from Telegram.
 
-Acceptance: offline tests cover allowed/denied/anonymous senders, malformed commands, successful/idempotent start/stop, missing container, API errors, connection failure, timeout, and concurrent requests. Stop grants a 120-second graceful shutdown window. Deployment passes administrator IDs and the restricted control socket group, documents host-helper setup and the socket privilege boundary, and does not operate a real Minecraft container during verification.
+Acceptance: offline tests cover allowed/denied/anonymous senders, malformed commands, successful/idempotent start/stop, missing container, API errors, connection failure, timeout, and concurrent requests. Stop grants a 120-second graceful shutdown window. Deployment passes allowed chat IDs and the restricted control socket group, documents host-helper setup and the socket privilege boundary, and does not operate a real Minecraft container during verification.
+
+## 0.4. Chat-only authorization and setup recovery — complete
+
+Scope: treat every allowed chat as a trusted administrator chat. Remove per-user configuration and checks, including anonymous sender restrictions. Keep silent rejection outside the chat allowlist. Document recovery when helper files were created under the runner account but installation runs under another account.
+
+Acceptance: lifecycle commands work for different members and anonymous senders in allowed chats, disallowed chats never reach the helper, configuration/deployment no longer requires per-user IDs, and setup recovery uses absolute source paths with sudo.
 
 ## 1. Configuration — partially complete
 
 - [x] Load and validate the Telegram token from the process environment.
 - [x] Load and validate allowed chat IDs; enforce the allowlist before message handlers run.
-- [x] Add explicit administrator user IDs for privileged server lifecycle commands.
+- [x] Authorize server lifecycle commands by trusted administrator chat membership.
 - [ ] Add RCON connection settings when implementing whitelist commands.
 - Validate required values and fail with actionable errors without revealing secrets.
 - Provide a placeholder-only .env.example and configuration documentation.
@@ -52,7 +58,7 @@ Acceptance: tests cover command construction, invalid names, authentication fail
 
 - Add /help, /wl_add, /wl_remove, and /wl_list.
 - Support commands addressed to the bot in group chats.
-- Restrict commands to configured user IDs and chat IDs; reject anonymous or unverifiable senders.
+- Restrict commands to configured trusted administrator chats; do not add per-user restrictions without a new request.
 - Return readable validation and service error messages without leaking secrets.
 
 Acceptance: tests cover allowed and denied requests, malformed commands, and RCON failures. Denied requests never reach RCON. Bot startup and shutdown are documented.

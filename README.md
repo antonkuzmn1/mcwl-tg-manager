@@ -51,7 +51,7 @@ Use numeric Telegram chat IDs, not usernames or invite links. Group and supergro
 
 Spaces around IDs and duplicates are accepted. Missing, empty, malformed, zero, or out-of-range values stop startup. Messages from other chats are silently discarded before command handlers run, including `/start` in private chats. The restriction covers all message handlers; new update types must receive equivalent access control before being enabled. Group-to-supergroup migration changes the chat ID, so update the allowlist and restart the bot when needed. Changes to the environment take effect after restart.
 
-The allowlist controls chats, not individual members: any member of an allowed chat can use the placeholder. Server start/stop additionally requires an explicit user ID from `TELEGRAM_ADMIN_USER_IDS`; whitelist administration is still pending.
+The allowlist identifies trusted administrator chats. Every participant in an allowed chat can use server control, including anonymous senders. No per-user ID list or Telegram administrator-role check is required; whitelist administration is still pending.
 
 The bot uses long polling and needs outbound access to Telegram; no inbound HTTP port is required. Disable any existing webhook for this bot before using polling. Stop with Ctrl+C or SIGTERM; the HTTP session is closed on shutdown. Run only one polling process per token.
 
@@ -69,11 +69,7 @@ Tests use synthetic updates and mocked Telegram requests. They do not need real 
 - `/server_start`: start the existing Docker container named `mc`.
 - `/server_stop`: stop `mc`, giving it up to 120 seconds for graceful shutdown before Docker may force termination.
 
-Both support `@YourBotUsername` in groups and accept no arguments. Only senders listed in the comma-separated `TELEGRAM_ADMIN_USER_IDS` variable can use them, and only inside allowed chats. Missing/empty admin IDs disable server control. Anonymous administrators, messages sent as a chat, and bots cannot use these commands. Chat membership or Telegram's administrator role alone does not grant permission.
-
-```sh
-export TELEGRAM_ADMIN_USER_IDS="123456789,987654321"
-```
+Both support `@YourBotUsername` in groups and accept no arguments. Every participant in an allowed administrator chat can use them, including anonymous administrators. Authorization is based only on `TELEGRAM_ALLOWED_CHAT_IDS`; commands from other chats are silently ignored.
 
 The bot talks asynchronously to a host helper over `/var/lib/mcwl-control/control.sock`. The helper accepts only start/stop for `mc`; the bot has no access to the Docker API socket, arbitrary shell commands, container creation/removal, or other containers. Install the helper using [the deployment guide](docs/DEPLOYMENT.md#5a-install-the-restricted-server-control-helper) before deploying this version. The bot container needs the helper directory bind mount and its group ID; the deployment script detects the group automatically.
 
@@ -87,7 +83,7 @@ See [the deployment guide](docs/DEPLOYMENT.md) for the full manual setup: SSH ac
 
 The CI/CD workflow runs offline tests on GitHub-hosted runners with Python 3.12 and 3.14. After both pass, main pushes or main-only manual runs build and deploy a Docker image on the production runner. PRs do not deploy. Workflow actions and container base images are pinned to immutable revisions/digests.
 
-Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` plus `TELEGRAM_ADMIN_USER_IDS` as production environment variables. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
+Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` as a production environment variable. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
 
 Runtime secrets stay outside the checkout and image. The deployment validates configuration before replacing the service and checks process liveness afterward; verify actual Telegram connectivity with `/start` manually. RCON and whitelist administration are not implemented.
 

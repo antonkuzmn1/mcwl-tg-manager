@@ -17,16 +17,11 @@ async def handle_start(message: Message) -> None:
 
 def create_dispatcher(
     allowed_chat_ids: frozenset[int],
-    admin_user_ids: frozenset[int] = frozenset(),
     controller: ServerController | None = None,
 ) -> Dispatcher:
     server = controller if controller is not None else ServerController()
 
     async def handle_server(message: Message, command: CommandObject) -> None:
-        sender = message.from_user
-        if message.sender_chat is not None or sender is None or sender.is_bot or sender.id not in admin_user_ids:
-            await message.answer("You are not authorized to control the server.")
-            return
         if command.args:
             await message.answer(f"Usage: /{command.command}")
             return
@@ -49,7 +44,7 @@ def create_dispatcher(
 
 
 async def run(settings: Settings) -> None:
-    dispatcher = create_dispatcher(settings.allowed_chat_ids, settings.admin_user_ids)
+    dispatcher = create_dispatcher(settings.allowed_chat_ids)
     async with Bot(token=settings.telegram_bot_token) as bot:
         await dispatcher.start_polling(
             bot,

@@ -1,4 +1,4 @@
-"""Verify both chat and sender authorization before any host-helper request."""
+"""Verify both chat and chat authorization before any host-helper request."""
 
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -14,7 +14,7 @@ TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
     async def dispatch(self, text, *, chat_id=-42, sender_id=42, anonymous=False, is_bot=False,
-                       admins=frozenset({42}), error=None):
+                       error=None):
         controller = AsyncMock()
         controller.change_state.return_value = "Operation completed."
         controller.change_state.side_effect = error
@@ -31,7 +31,7 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
         request = AsyncMock()
         try:
             with patch.object(bot.session, "make_request", request):
-                await create_dispatcher(frozenset({-42}), admins, controller).feed_update(bot, update)
+                await create_dispatcher(frozenset({-42}), controller).feed_update(bot, update)
         finally:
             await bot.session.close()
         return controller, [call.args[1].text for call in request.call_args_list]
@@ -43,18 +43,17 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
                 controller.change_state.assert_awaited_once_with(action)
                 self.assertEqual(replies[-1], "Operation completed.")
 
-    async def test_other_chats_are_silently_ignored_even_for_an_admin(self):
+    async def test_other_chats_are_silently_ignored(self):
         controller, replies = await self.dispatch("/server_stop", chat_id=-99)
         controller.change_state.assert_not_awaited()
         self.assertEqual(replies, [])
 
-    async def test_unlisted_anonymous_missing_and_bot_senders_are_denied(self):
-        for options in ({"sender_id": 99}, {"anonymous": True}, {"sender_id": None},
-                        {"is_bot": True}, {"admins": frozenset()}):
+    async def test_chat_members_and_anonymous_senders_need_no_user_allowlist(self):
+        for options in ({"sender_id": 99}, {"anonymous": True}, {"sender_id": None}, {"is_bot": True}):
             with self.subTest(options=options):
                 controller, replies = await self.dispatch("/server_stop", **options)
-                controller.change_state.assert_not_awaited()
-                self.assertEqual(replies, ["You are not authorized to control the server."])
+                controller.change_state.assert_awaited_once_with("stop")
+                self.assertEqual(replies[-1], "Operation completed.")
 
     async def test_arguments_and_other_bot_mentions_never_reach_docker(self):
         for text in ("/server_start other-container", "/server_stop --force", "/server_start@another_bot"):

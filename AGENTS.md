@@ -6,7 +6,7 @@ Use English for all project content, including code, comments, documentation, co
 
 ## Project context
 
-This project will manage a Minecraft server whitelist from Telegram through RCON. An asynchronous aiogram bot handles /start and admin-only /server_start and /server_stop for the existing mc container; whitelist management is not implemented. Read README.md for setup, PLAN.md for milestones, and HANDOFF.md for current state before starting work.
+This project will manage a Minecraft server whitelist from Telegram through RCON. An asynchronous aiogram bot handles /start and chat-authorized /server_start and /server_stop for the existing mc container; whitelist management is not implemented. Read README.md for setup, PLAN.md for milestones, and HANDOFF.md for current state before starting work.
 
 ## Workflow
 
@@ -32,6 +32,6 @@ Install the locked environment with `uv sync --locked`. Run offline tests with `
 ## Implementation boundaries
 
 - Never commit credentials, Telegram tokens, RCON passwords, or real deployment secrets.
-- Require TELEGRAM_ALLOWED_CHAT_IDS and silently ignore messages from other chats, including private chats. Apply equivalent access control before enabling new update types. Future privileged commands also require explicit user authorization and must deny access by default.
+- Require TELEGRAM_ALLOWED_CHAT_IDS and silently ignore messages from other chats, including private chats. Apply equivalent access control before enabling new update types. Allowed chats are trusted administrator chats: every participant, including anonymous chat senders, may use server control. Do not introduce per-user ID lists or Telegram administrator-role checks unless the user requests them. Deny commands outside the chat allowlist by default.
 - Expose only the intended whitelist operations and fixed start/stop operations for mc; do not add arbitrary remote console execution, user-supplied Docker arguments, or a host Docker socket mount in the bot. Host lifecycle operations belong in the restricted helper service.
 - Do not push, deploy, or contact live Telegram/Minecraft services unless requested.

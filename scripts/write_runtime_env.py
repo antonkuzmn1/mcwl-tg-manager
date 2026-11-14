@@ -13,10 +13,6 @@ def write_runtime_env(destination: Path) -> None:
         if not value or any(char in value for char in ("\r", "\n", "\x00")):
             raise ValueError(f"{name} must be a nonempty single-line value.")
         values[name] = value
-    admins = os.environ.get("TELEGRAM_ADMIN_USER_IDS", "").strip()
-    if any(char in admins for char in ("\r", "\n", "\x00")):
-        raise ValueError("TELEGRAM_ADMIN_USER_IDS must be a single-line value.")
-    values["TELEGRAM_ADMIN_USER_IDS"] = admins
     descriptor, temporary = tempfile.mkstemp(dir=destination.parent, prefix=".bot-env-")
     try:
         with os.fdopen(descriptor, "w") as output:

@@ -12,7 +12,6 @@ mkdir -p "$deploy_root"
 chmod 700 "$deploy_root"
 exec 9>"$deploy_root/deploy.lock"
 flock -w 120 9
-export TELEGRAM_ADMIN_USER_IDS="${TELEGRAM_ADMIN_USER_IDS:-}"
 export CONTROL_GID="${CONTROL_GID:-$(stat -c '%g' /var/lib/mcwl-control)}"
 if [[ ! "$CONTROL_GID" =~ ^[0-9]+$ ]]; then
   echo 'Server control group ID must be numeric.' >&2
@@ -21,7 +20,7 @@ fi
 
 # Validate without starting polling or stopping the existing container.
 docker run --rm --network none \
-  --env TELEGRAM_BOT_TOKEN --env TELEGRAM_ALLOWED_CHAT_IDS --env TELEGRAM_ADMIN_USER_IDS \
+  --env TELEGRAM_BOT_TOKEN --env TELEGRAM_ALLOWED_CHAT_IDS \
   "$MCWL_IMAGE" /app/.venv/bin/python -c \
   'from mcwl_tg_manager.config import Settings; Settings.from_env()'
 
