@@ -7,7 +7,10 @@ from aiogram import Bot
 from aiogram.types import Update, User
 
 from mcwl_tg_manager.bot import create_dispatcher
-from mcwl_tg_manager.messages import SERVER_READY, SERVER_STARTING, READINESS_ERRORS
+from mcwl_tg_manager.messages import (
+    SERVER_READY, SERVER_STARTING, READINESS_ERRORS, SERVER_STOPPING,
+    SERVER_STOPPED, SERVER_ALREADY_STOPPED, SERVER_STOP_FAILED, COMMAND_USAGE,
+)
 from mcwl_tg_manager.server import ServerControlError
 
 TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
@@ -15,9 +18,9 @@ TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
     async def dispatch(self, text, *, chat_id=-42, sender_id=42, anonymous=False, is_bot=False,
-                       error=None, readiness_error=None):
+                       error=None, readiness_error=None, result="Operation completed."):
         controller = AsyncMock()
-        controller.change_state.return_value = "Operation completed."
+        controller.change_state.return_value = result
         controller.change_state.side_effect = error
         controller.wait_until_ready.side_effect = readiness_error
         bot = Bot(TOKEN)
@@ -43,12 +46,13 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(text=text):
                 controller, replies = await self.dispatch(text)
                 controller.change_state.assert_awaited_once_with(action)
-                self.assertEqual(replies[-1], SERVER_READY if action == "start" else "Operation completed.")
+                self.assertEqual(replies[-1], SERVER_READY if action == "start" else SERVER_STOPPED)
                 if action == "start":
                     controller.wait_until_ready.assert_awaited_once()
                     self.assertEqual(replies[0], SERVER_STARTING)
                 else:
                     controller.wait_until_ready.assert_not_awaited()
+                    self.assertEqual(replies[0], SERVER_STOPPING)
 
     async def test_other_chats_are_silently_ignored(self):
         controller, replies = await self.dispatch("/server_stop", chat_id=-99)
@@ -61,7 +65,7 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(options=options):
                 controller, replies = await self.dispatch("/server_stop", **options)
                 controller.change_state.assert_awaited_once_with("stop")
-                self.assertEqual(replies[-1], "Operation completed.")
+                self.assertEqual(replies[-1], SERVER_STOPPED)
 
     async def test_arguments_and_other_bot_mentions_never_reach_docker(self):
         for text in ("/server_start other-container", "/server_stop --force", "/server_start@another_bot"):
@@ -69,12 +73,12 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
                 controller, replies = await self.dispatch(text)
                 controller.change_state.assert_not_awaited()
                 if "another_bot" not in text:
-                    self.assertTrue(replies[0].startswith("Usage:"))
+                    self.assertEqual(replies[0], COMMAND_USAGE.format(command=text.split()[0][1:]))
 
     async def test_docker_failures_are_reported(self):
         controller, replies = await self.dispatch("/server_stop", error=ServerControlError("Docker is unavailable."))
         controller.change_state.assert_awaited_once_with("stop")
-        self.assertEqual(replies[-1], "Docker is unavailable.")
+        self.assertEqual(replies[-1], SERVER_STOP_FAILED)
         controller.wait_until_ready.assert_not_awaited()
         self.assertNotIn(SERVER_READY, replies)
 
@@ -87,3 +91,10 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
                 controller.wait_until_ready.assert_awaited_once()
                 self.assertNotIn(SERVER_READY, replies)
                 self.assertEqual(replies[-1], READINESS_ERRORS[code])
+
+    async def test_already_stopped_reply_is_localized_without_helper_changes(self):
+        controller, replies = await self.dispatch(
+            "/server_stop", result="The server container is already stopped."
+        )
+        self.assertEqual(replies, [SERVER_STOPPING, SERVER_ALREADY_STOPPED])
+        controller.wait_until_ready.assert_not_awaited()

@@ -2,7 +2,7 @@
 
 ## Current state
 
-- The asynchronous bot supports /help, its /start alias, and /server_start plus /server_stop for the existing Docker container mc. The placeholder is removed. Help and menu descriptions are Russian by explicit user request; other repository content remains English.
+- The asynchronous bot supports /help, its /start alias, and /server_start plus /server_stop for the existing Docker container mc. The placeholder is removed. Help is a three-line Russian list of help/server_start/server_stop; start remains an unadvertised alias and is absent from slash suggestions. Stop progress/success/already-stopped/failure and usage replies are also Russian; other repository content remains English.
 - At polling startup, chat-scoped Telegram menus are registered for every allowed chat. API failures are logged and do not block polling or registration for remaining chats. Tests mock all Telegram calls.
 - Authorization is chat-only: every participant of a configured trusted administrator chat can use lifecycle commands, including anonymous senders. Per-user configuration and checks have been removed by explicit user request. Disallowed chats are silently ignored. Commands accept no container names or arguments.
 - ServerController uses a restricted Unix socket, not the host Docker API. The host helper exposes start/stop and a read-only wait_ready operation, invokes fixed Docker arguments without a shell, checks container state, serializes lifecycle operations, and gives stop a 120-second graceful timeout. It never creates/removes containers or runs arbitrary console commands.
@@ -14,8 +14,8 @@
 
 ## Latest verification
 
-- 41 offline tests passed on local Python 3.14.6, including readiness success, stop/restart/replacement rejection, timeout, streaming ANSI/split markers, CLI cancellation cleanup, concurrent stop while loading, and chat notifications. Existing authorization/menu/deployment checks remain in place.
-- The updated Docker image built successfully. All 41 offline tests also passed on Python 3.12.16 inside a network-disabled Linux container. Docker processes are mocked; no real server actions are performed.
+- 42 offline tests passed on local Python 3.14.6 after shortening help, removing start from the menu, and translating stop replies. Coverage includes the exact three-command menu, short help, localized stop results, and existing readiness/authorization behavior.
+- The prior readiness implementation passed 41 tests on Python 3.12.16 inside the Docker image. This text/menu update was verified locally; no new image build was required. Docker processes are mocked; no real server actions are performed.
 - actionlint v1.7.7, Bash syntax, Compose configuration, local Markdown links, English content outside the explicit messages.py exception, and git diff --check were checked.
 - No real Minecraft container was started/stopped, no Telegram requests were sent, and no VM or GitHub settings were changed. Actual systemd service installation, socket permissions on the production host, and live server control remain manual verification steps.
 
@@ -30,4 +30,4 @@
 
 ## Next step
 
-User has now created mc and supplied successful Paper startup logs. Before deploying this readiness update, manually install the updated deploy/server_control.py as /opt/mcwl-control/server_control.py and restart mcwl-control, following the readiness upgrade section in docs/DEPLOYMENT.md. The systemd unit and secrets do not change. Then deploy and verify /server_start notifications. Do not access the VM, operate Minecraft, or push code without a new request.
+User has verified start readiness notifications and stop in production. Deploy this bot-only text/menu update normally; no host-helper/service/secret changes are needed. Reopen the Telegram chat if its command menu is cached. Do not access the VM, operate Minecraft, or push code without a new request.

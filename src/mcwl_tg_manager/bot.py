@@ -8,7 +8,11 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import BotCommand, BotCommandScopeChat, Message
 
 from mcwl_tg_manager.config import Settings
-from mcwl_tg_manager.messages import COMMAND_DESCRIPTIONS, HELP_MESSAGE, READINESS_ERRORS, SERVER_READY, SERVER_STARTING
+from mcwl_tg_manager.messages import (
+    COMMAND_DESCRIPTIONS, COMMAND_USAGE, HELP_MESSAGE, READINESS_ERRORS,
+    SERVER_ALREADY_STOPPED, SERVER_READY, SERVER_STARTING, SERVER_STOP_FAILED,
+    SERVER_STOPPED, SERVER_STOPPING,
+)
 from mcwl_tg_manager.middleware import AllowedChatsMiddleware
 from mcwl_tg_manager.server import ServerController, ServerControlError
 
@@ -36,17 +40,23 @@ def create_dispatcher(
 
     async def handle_server(message: Message, command: CommandObject) -> None:
         if command.args:
-            await message.answer(f"Usage: /{command.command}")
+            await message.answer(COMMAND_USAGE.format(command=command.command))
             return
         action = "start" if command.command == "server_start" else "stop"
-        await message.answer(SERVER_STARTING if action == "start" else "Stopping server container...")
+        await message.answer(SERVER_STARTING if action == "start" else SERVER_STOPPING)
         try:
             result = await server.change_state(action)
             if action == "start":
                 await server.wait_until_ready()
                 result = SERVER_READY
+            else:
+                result = SERVER_ALREADY_STOPPED if result == "The server container is already stopped." else SERVER_STOPPED
         except ServerControlError as error:
-            await message.answer(READINESS_ERRORS.get(error.code, str(error)))
+            if action == "stop":
+                logger.warning("Server stop operation failed: %s", error)
+                await message.answer(SERVER_STOP_FAILED)
+            else:
+                await message.answer(READINESS_ERRORS.get(error.code, str(error)))
             return
         await message.answer(result)
 

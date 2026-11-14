@@ -2,7 +2,7 @@
 
 ## Language
 
-Use English for all project content, including code, comments, documentation, configuration descriptions, and user-facing messages. Exception explicitly requested by the user: Russian Telegram help text, readiness notifications, and command-menu descriptions belong in src/mcwl_tg_manager/messages.py. Keep all other project content in English.
+Use English for all project content, including code, comments, documentation, configuration descriptions, and user-facing messages. Exception explicitly requested by the user: Russian Telegram help text, readiness notifications, stop replies, command usage, and command-menu descriptions belong in src/mcwl_tg_manager/messages.py. Keep all other project content in English.
 
 ## Project context
 

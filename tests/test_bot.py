@@ -86,6 +86,8 @@ class RoutingTests(unittest.IsolatedAsyncioTestCase):
                 method = request.call_args.args[1]
                 self.assertIsInstance(method, SendMessage)
                 self.assertEqual(method.text, HELP_MESSAGE)
+                self.assertEqual(len(method.text.splitlines()), 3)
+                self.assertNotIn("/start", method.text)
 
     async def test_disallowed_chats_never_reach_the_handler(self):
         for chat_type in ("private", "group", "supergroup"):
@@ -133,7 +135,7 @@ class CommandMenuTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({call.kwargs["scope"].chat_id for call in bot.set_my_commands.await_args_list}, {-42, 99})
         for call in bot.set_my_commands.await_args_list:
             self.assertEqual([command.command for command in call.args[0]],
-                             ["help", "start", "server_start", "server_stop"])
+                             ["help", "server_start", "server_stop"])
             self.assertTrue(all(command.description for command in call.args[0]))
 
     async def test_menu_failure_is_logged_and_remaining_chats_are_attempted(self):

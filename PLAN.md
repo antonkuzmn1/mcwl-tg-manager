@@ -47,6 +47,12 @@ Scope: after /server_start, asynchronously wait up to five minutes for the Paper
 
 Acceptance: ignore previous runs using Docker StartedAt, pin container ID/start time and reject restart/replacement/exit during waiting, bound CLI/client/wait timeouts, keep stop available during loading, scan logs without buffering full history, and cover success/failure/concurrency with offline tests. Document the required manual host-helper update before redeploying the bot.
 
+## 0.7. Concise help and Russian stop replies — complete
+
+Scope: remove start from help and slash suggestions while keeping it as an unadvertised help alias. Reduce help to the three visible commands. Translate stop progress, success, already-stopped, failure, and command usage messages in the bot without requiring a host-helper update.
+
+Acceptance: the registered menu contains only help/server_start/server_stop, help contains no start alias or deployment details, and stop replies are Russian for normal, idempotent, and error paths. Existing chat authorization and readiness behavior remain covered.
+
 ## 1. Configuration — partially complete
 
 - [x] Load and validate the Telegram token from the process environment.

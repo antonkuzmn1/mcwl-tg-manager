@@ -1,8 +1,8 @@
 # mcwl-tg-manager
 
-An asynchronous Telegram bot built with aiogram. `/help` shows Russian instructions for server control, and `/start` opens the same help. The placeholder has been removed.
+An asynchronous Telegram bot built with aiogram. `/help` shows a concise Russian command list, and `/start` remains an unadvertised alias. The placeholder has been removed.
 
-Available commands are `help`, `start`, `server_start`, and `server_stop`. On startup, the bot registers Russian command descriptions with Telegram for each allowed chat, so clients can suggest them when typing `/`. Registration failures are logged without disabling polling. Reopen the chat if the client has not refreshed the command list. No BotFather setup is required for the automatic chat-scoped menu.
+The help text and slash menu list only `help`, `server_start`, and `server_stop`. On startup, the bot registers Russian command descriptions with Telegram for each allowed chat, so clients can suggest them when typing `/`. Registration failures are logged without disabling polling. Reopen the chat if the client has not refreshed the command list. No BotFather setup is required for the automatic chat-scoped menu.
 
 All commands require an allowed chat; unknown messages and commands are ignored. Menu visibility does not grant access: chat authorization still applies to manually entered commands.
 
@@ -77,7 +77,7 @@ The Minecraft container must already exist on the same VM under the exact name `
 
 After `/server_start`, the bot sends a Russian loading message, then waits asynchronously for the Paper `Done (...)! For help, type "help"` marker. Only logs since the current Docker `StartedAt` timestamp count; the helper checks container ID and start time before accepting a marker. Old runs, stopped containers, and replacements cannot confirm readiness. The helper scans logs as a bounded stream instead of buffering full history and checks every three seconds for up to five minutes. A read-only readiness wait does not hold the lifecycle lock, so `/server_stop` remains available while loading.
 
-A final Russian message confirms readiness in the requesting chat. Timeout, exit, or restart produces a failure message instead. This confirms the Paper startup marker, not external network reachability. Retain the current run's startup logs; if those logs have been rotated away, readiness cannot be confirmed from them. Notifications follow `/server_start` requests; there is no continuous monitor for external starts, and pending notifications are not persisted across bot/helper restarts.
+Stop progress, successful stop, already-stopped, and stop failure replies are Russian. A final Russian message confirms readiness in the requesting chat. Timeout, exit, or restart produces a failure message instead. This confirms the Paper startup marker, not external network reachability. Retain the current run's startup logs; if those logs have been rotated away, readiness cannot be confirmed from them. Notifications follow `/server_start` requests; there is no continuous monitor for external starts, and pending notifications are not persisted across bot/helper restarts.
 
 **Upgrade requirement:** update the root-owned host helper using [the readiness upgrade procedure](docs/DEPLOYMENT.md#updating-the-helper-for-readiness-notifications) before deploying this bot version. The new protocol adds `wait_ready`; an old helper will reject it. No new credentials or systemd unit changes are needed.
 
