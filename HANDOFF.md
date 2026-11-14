@@ -8,9 +8,15 @@
 - The updater, sudo rule, and systemd unit remain administrator-managed. CI cannot self-update them through the updater. Main/production access authorizes helper code deployment with the runner's existing Docker privileges.
 - Successful deploys save current-helper.py alongside bot snapshots; later deploys preserve previous-helper.py for paired manual rollback. A later bot failure does not roll back a successfully updated helper automatically. The first transition from manual deployment has no old helper snapshot; recover it from the matching Git revision when needed.
 
+## Latest fix
+
+- Recognize the native `There are no whitelisted players` response as an empty list, including existing RCON color/whitespace normalization. Retain strict rejection of malformed text and count mismatches.
+- Reproduced the failure before fixing it; regression tests exercise remove-last-player then list, formatted native empty replies, and malformed lookalikes through the helper/client socket protocol.
+- User logs confirm removal succeeded, then the same player rejoined. OP bypass is a likely separate explanation (the player used Creative mode); operator status/effective settings have not been inspected. README documents read-only inspection and optional explicit deop. No privileges were changed.
+
 ## Latest verification
 
-- 74 offline tests passed on local Python 3.14 and network-disabled Linux Python 3.12. Tests mock service/Docker/RCON operations; updater tests never execute submitted source or contact real system services.
+- 77 offline tests passed on local Python 3.14 and network-disabled Linux Python 3.12. Tests mock service/Docker/RCON operations; updater tests never execute submitted source or contact real system services.
 - Coverage includes bounded input, invalid syntax, unchanged-file health check, atomic file failure, restart and recovery failures, service/socket readiness, fixed command arguments, and aborting bot replacement when helper update fails, plus existing bot and host-helper tests.
 - Bash syntax, actionlint, Compose configuration, sudoers syntax, Markdown links, and git diff --check passed. No image packaging changes were needed.
 - No VM, live Telegram, or Minecraft access; no push or deployment performed.

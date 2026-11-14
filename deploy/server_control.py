@@ -157,6 +157,8 @@ class HostController:
         text = ANSI_PATTERN.sub(b"", output.encode("utf-8")).decode("utf-8").strip()
         text = re.sub(r"\u00a7[0-9a-fk-or]", "", text, flags=re.IGNORECASE)
         if action == "list":
+            if text == "There are no whitelisted players":
+                return {"status": "listed", "players": []}
             match = re.fullmatch(r"There are ([0-9]+) whitelisted player\(s\):\s*(.*)", text)
             if match:
                 names = [name.strip() for name in match[2].split(",")] if match[2].strip() else []

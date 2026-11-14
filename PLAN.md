@@ -116,3 +116,9 @@ Acceptance: CI runs without Telegram or Minecraft credentials and checks the sam
 Scope: install a root-owned, no-argument updater once; allow the runner to submit helper source on stdin through this fixed sudo command. Deploy the tested helper before replacing the bot, skip unchanged files, and restore the prior helper if restart/readiness fails. Keep the unit and updater under manual administrator control.
 
 Acceptance: reject invalid/oversized source and arguments before mutation; replace the fixed helper path atomically; verify service/socket readiness; roll back failed updates; abort bot replacement on updater failure. Cover these paths offline and document one-time installation, privilege scope, and paired rollback. Do not contact the VM.
+
+## 0.9. Native empty whitelist response — complete
+
+Scope: recognize Minecraft's exact `There are no whitelisted players` response as an empty list, retaining strict rejection of malformed or unrelated responses. Explain operator bypass separately from whitelist membership.
+
+Acceptance: regression coverage exercises native empty text, formatting, remove-last-player then list, and malformed lookalikes through the real local helper/client protocol. Existing mutations and authorization remain unchanged. No live server changes.

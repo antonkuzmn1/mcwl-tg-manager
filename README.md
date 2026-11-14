@@ -93,7 +93,7 @@ All participants of allowed chats may use these commands, including anonymous ad
 
 Minecraft must be running, with RCON enabled and the packaged `rcon-cli` working inside `mc`. The restricted helper executes only `docker exec mc rcon-cli whitelist list|add|remove`, with separately validated arguments and a bounded timeout. It uses Minecraft's existing RCON configuration: no bot-side password, published RCON port, shared data mount, or new GitHub secret is needed. Lifecycle and whitelist operations share a lock so they cannot race with a requested stop. Readiness checks remain independent.
 
-The helper recognizes standard English Vanilla/Paper whitelist responses, including already-listed/not-listed cases. It does not treat a zero CLI exit code as proof of a successful Minecraft command. Unexpected/plugin-modified responses fail without reporting success or forwarding raw diagnostics; inspect `/wl_list` before retrying a mutation whose result is uncertain. Changes use the server's native whitelist commands, which update its in-memory and persistent whitelist; the bot does not edit whitelist.json or calculate UUIDs itself.
+The helper recognizes standard English Vanilla/Paper whitelist responses, including already-listed/not-listed cases. The native empty response (`There are no whitelisted players`) returns an empty list. It does not treat a zero CLI exit code as proof of a successful Minecraft command. Unexpected/plugin-modified responses fail without reporting success or forwarding raw diagnostics; inspect `/wl_list` before retrying a mutation whose result is uncertain. Changes use the server's native whitelist commands, which update its in-memory and persistent whitelist; the bot does not edit whitelist.json or calculate UUIDs itself.
 
 **Upgrade requirement:** enable automatic helper updates or use [the manual whitelist upgrade procedure](docs/DEPLOYMENT.md#updating-the-helper-for-whitelist-commands). An old helper will reject the new operations. Do not configure a conflicting startup `WHITELIST` source that overwrites runtime changes unless that behavior is intended.
 
@@ -125,3 +125,9 @@ Runtime secrets stay outside the checkout and image. The deployment validates co
 - [HANDOFF.md](HANDOFF.md): current state, verification, and the next step.
 
 Work proceeds in small tasks: define acceptance criteria, implement, verify, update the documents, and create a Conventional Commit. Planned milestones are implemented only when requested.
+
+### Whitelist troubleshooting
+
+Removing a player from the whitelist does not remove operator rights. Paper operators can bypass whitelist membership; test access with a non-operator account. Check the operator list privately with `sudo docker exec mc cat /data/ops.json`. If intended, revoke privileges using `sudo docker exec mc rcon-cli deop PlayerName`, then reconnect. This removes operator privileges, so do it only when that is intended. See [Paper whitelist verification](https://jd.papermc.io/paper/1.21.10/com/destroystokyo/paper/event/profile/ProfileWhitelistVerifyEvent.html#isOp()).
+
+If a non-operator can still connect after removal, inspect the effective `white-list` and `enforce-whitelist` values in `/data/server.properties` and any plugins that alter login/whitelist checks. Do not infer effective runtime settings solely from Compose environment values. To diagnose an unexpected list response, run the read-only `sudo docker exec mc rcon-cli whitelist list` and preserve its exact output; the helper deliberately rejects unknown text rather than claiming an empty list.

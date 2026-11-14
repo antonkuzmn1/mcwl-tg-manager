@@ -46,6 +46,33 @@ class WhitelistProtocolTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(await self.client.whitelist("list"), WhitelistResult("listed", players))
                 self.host.docker.assert_awaited_with("exec", "mc", "rcon-cli", "whitelist", "list", timeout=20)
 
+    async def test_native_empty_list_after_removing_last_player(self):
+        self.host.docker.side_effect = [
+            "running", "Removed Anton13yo from the whitelist",
+            "running", "There are no whitelisted players",
+        ]
+        self.assertEqual(await self.client.whitelist("remove", "Anton13yo"),
+                         WhitelistResult("removed", ("Anton13yo",)))
+        self.assertEqual(await self.client.whitelist("list"), WhitelistResult("listed", ()))
+
+    async def test_native_empty_list_with_rcon_formatting(self):
+        for output in ("There are no whitelisted players\n",
+                       "\x1b[32mThere are no whitelisted players\x1b[0m",
+                       "\u00a7aThere are no whitelisted players\u00a7r"):
+            with self.subTest(output=output):
+                self.host.docker.side_effect = ["running", output]
+                self.assertEqual(await self.client.whitelist("list"), WhitelistResult("listed", ()))
+
+    async def test_empty_list_lookalikes_are_not_accepted(self):
+        for output in ("", "There are no whitelisted", "There are no whitelisted players: Steve",
+                       "There are no whitelisted players\nUnexpected diagnostic",
+                       "There are 1 whitelisted player(s):"):
+            with self.subTest(output=output):
+                self.host.docker.side_effect = ["running", output]
+                with self.assertRaises(ServerControlError) as error:
+                    await self.client.whitelist("list")
+                self.assertEqual(error.exception.code, "whitelist_unexpected_response")
+
     async def test_add_remove_and_idempotent_results(self):
         for action, output, status in (
             ("add", "Added Steve to the whitelist", "added"),
