@@ -1,18 +1,31 @@
 """Asynchronous Telegram application and authorized command handlers."""
 
+import logging
+
 from aiogram import Bot, Dispatcher, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandObject, CommandStart
-from aiogram.types import Message
+from aiogram.types import BotCommand, BotCommandScopeChat, Message
 
 from mcwl_tg_manager.config import Settings
+from mcwl_tg_manager.messages import COMMAND_DESCRIPTIONS, HELP_MESSAGE
 from mcwl_tg_manager.middleware import AllowedChatsMiddleware
 from mcwl_tg_manager.server import ServerController, ServerControlError
 
-START_MESSAGE = "Hello! Minecraft whitelist management is coming soon."
+logger = logging.getLogger(__name__)
 
 
-async def handle_start(message: Message) -> None:
-    await message.answer(START_MESSAGE)
+async def handle_help(message: Message) -> None:
+    await message.answer(HELP_MESSAGE)
+
+
+async def register_commands(bot: Bot, allowed_chat_ids: frozenset[int]) -> None:
+    commands = [BotCommand(command=name, description=text) for name, text in COMMAND_DESCRIPTIONS]
+    for chat_id in sorted(allowed_chat_ids):
+        try:
+            await bot.set_my_commands(commands, scope=BotCommandScopeChat(chat_id=chat_id))
+        except TelegramAPIError:
+            logger.warning("Could not register command menu for chat %s; continuing startup.", chat_id)
 
 
 def create_dispatcher(
@@ -34,12 +47,18 @@ def create_dispatcher(
             return
         await message.answer(result)
 
-    router = Router(name="start")
-    router.message.register(handle_start, CommandStart())
+    router = Router(name="commands")
+    router.message.register(handle_help, CommandStart())
+    router.message.register(handle_help, Command("help"))
     router.message.register(handle_server, Command("server_start", "server_stop"))
     dispatcher = Dispatcher()
     dispatcher.message.outer_middleware(AllowedChatsMiddleware(allowed_chat_ids))
     dispatcher.include_router(router)
+
+    async def on_startup(bot: Bot) -> None:
+        await register_commands(bot, allowed_chat_ids)
+
+    dispatcher.startup.register(on_startup)
     return dispatcher
 
 

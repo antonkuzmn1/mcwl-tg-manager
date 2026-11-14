@@ -6,9 +6,11 @@ from unittest.mock import AsyncMock, patch
 
 from aiogram import Bot
 from aiogram.methods import SendMessage
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Update, User
 
-from mcwl_tg_manager.bot import START_MESSAGE, create_dispatcher, run
+from mcwl_tg_manager.bot import create_dispatcher, run
+from mcwl_tg_manager.messages import HELP_MESSAGE
 from mcwl_tg_manager.config import Settings
 
 TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
@@ -74,22 +76,25 @@ class RoutingTests(unittest.IsolatedAsyncioTestCase):
             await bot.session.close()
         return request
 
-    async def test_start_in_private_and_group_chats(self):
+    async def test_help_and_start_in_private_and_group_chats(self):
         for text, chat_type in (("/start", "private"), ("/start", "group"),
-                                ("/start@mcwl_test_bot", "supergroup")):
+                                ("/start@mcwl_test_bot", "supergroup"), ("/help", "private"),
+                                ("/help", "group"), ("/help@mcwl_test_bot", "supergroup")):
             with self.subTest(text=text, chat_type=chat_type):
                 request = await self.check_message(text, chat_type)
                 request.assert_awaited_once()
                 method = request.call_args.args[1]
                 self.assertIsInstance(method, SendMessage)
-                self.assertEqual(method.text, START_MESSAGE)
+                self.assertEqual(method.text, HELP_MESSAGE)
 
     async def test_disallowed_chats_never_reach_the_handler(self):
         for chat_type in ("private", "group", "supergroup"):
             with self.subTest(chat_type=chat_type):
-                with patch("mcwl_tg_manager.bot.handle_start", new_callable=AsyncMock) as handler:
+                with patch("mcwl_tg_manager.bot.handle_help", new_callable=AsyncMock) as handler:
                     handler.aiogram_flag = {}
-                    request = await self.check_message("/start", chat_type, frozenset({999}))
+                    for text in ("/start", "/help"):
+                        request = await self.check_message(text, chat_type, frozenset({999}))
+                        request.assert_not_awaited()
                     handler.assert_not_awaited()
                     request.assert_not_awaited()
 
@@ -98,7 +103,7 @@ class RoutingTests(unittest.IsolatedAsyncioTestCase):
         request.assert_not_awaited()
 
     async def test_unrelated_messages_and_commands_are_ignored(self):
-        for text in ("hello", "/help", "/wl_add Steve", "/start@another_bot"):
+        for text in ("hello", "/unknown", "/wl_add Steve", "/start@another_bot", "/help@another_bot"):
             with self.subTest(text=text):
                 request = await self.check_message(text)
                 request.assert_not_awaited()
@@ -118,3 +123,25 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
                             await run(Settings(TOKEN, frozenset({42})))
                         close.assert_awaited_once()
                         self.assertEqual(polling.call_args.kwargs["allowed_updates"], ["message"])
+
+
+class CommandMenuTests(unittest.IsolatedAsyncioTestCase):
+    async def test_startup_registers_commands_only_for_allowed_chats(self):
+        bot = AsyncMock()
+        await create_dispatcher(frozenset({-42, 99})).emit_startup(bot=bot)
+        self.assertEqual(bot.set_my_commands.await_count, 2)
+        self.assertEqual({call.kwargs["scope"].chat_id for call in bot.set_my_commands.await_args_list}, {-42, 99})
+        for call in bot.set_my_commands.await_args_list:
+            self.assertEqual([command.command for command in call.args[0]],
+                             ["help", "start", "server_start", "server_stop"])
+            self.assertTrue(all(command.description for command in call.args[0]))
+
+    async def test_menu_failure_is_logged_and_remaining_chats_are_attempted(self):
+        from aiogram.methods import SetMyCommands
+        bot = AsyncMock()
+        bot.set_my_commands.side_effect = [
+            TelegramBadRequest(method=SetMyCommands(commands=[]), message="Chat not found"), True,
+        ]
+        with self.assertLogs("mcwl_tg_manager.bot", level="WARNING"):
+            await create_dispatcher(frozenset({-42, 99})).emit_startup(bot=bot)
+        self.assertEqual(bot.set_my_commands.await_count, 2)

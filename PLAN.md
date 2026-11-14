@@ -35,6 +35,12 @@ Scope: treat every allowed chat as a trusted administrator chat. Remove per-user
 
 Acceptance: lifecycle commands work for different members and anonymous senders in allowed chats, disallowed chats never reach the helper, configuration/deployment no longer requires per-user IDs, and setup recovery uses absolute source paths with sudo.
 
+## 0.5. Help and Telegram command menu — complete
+
+Scope: replace the placeholder with Russian /help instructions; /start opens the same help. Register help/start/server_start/server_stop commands with Russian descriptions for each allowed chat during polling startup. Keep source documentation in English, with an explicit exception for requested Russian help/menu text. Explain the missing mc container and one-time creation from the existing Minecraft Compose directory.
+
+Acceptance: help/start routes work in allowed private/group chats and stay silent elsewhere. Startup registers chat-scoped menus, and a Telegram API failure for one menu does not disable polling or remaining menus. Tests mock all Telegram calls; no live Minecraft container is created or changed.
+
 ## 1. Configuration — partially complete
 
 - [x] Load and validate the Telegram token from the process environment.

@@ -1,10 +1,10 @@
 # mcwl-tg-manager
 
-An asynchronous Telegram bot built with aiogram. `/start` responds with the placeholder:
+An asynchronous Telegram bot built with aiogram. `/help` shows Russian instructions for server control, and `/start` opens the same help. The placeholder has been removed.
 
-> Hello! Minecraft whitelist management is coming soon.
+Available commands are `help`, `start`, `server_start`, and `server_stop`. On startup, the bot registers Russian command descriptions with Telegram for each allowed chat, so clients can suggest them when typing `/`. Registration failures are logged without disabling polling. Reopen the chat if the client has not refreshed the command list. No BotFather setup is required for the automatic chat-scoped menu.
 
-The command works in private and group chats, including `/start@YourBotUsername`. Other messages and unknown commands are ignored. All commands require an allowed chat. Administrators can also start and stop the existing Minecraft container using the commands below.
+All commands require an allowed chat; unknown messages and commands are ignored. Menu visibility does not grant access: chat authorization still applies to manually entered commands.
 
 ## AI disclosure
 
@@ -49,7 +49,7 @@ export TELEGRAM_ALLOWED_CHAT_IDS="-1001234567890,-987654321,123456789"
 
 Use numeric Telegram chat IDs, not usernames or invite links. Group and supergroup IDs are negative; a private chat must have its own ID explicitly included. The IDs above are examples. Obtain the real ID from a trusted Telegram client/tool or an update's `message.chat.id`; never disclose the bot token to an ID lookup service.
 
-Spaces around IDs and duplicates are accepted. Missing, empty, malformed, zero, or out-of-range values stop startup. Messages from other chats are silently discarded before command handlers run, including `/start` in private chats. The restriction covers all message handlers; new update types must receive equivalent access control before being enabled. Group-to-supergroup migration changes the chat ID, so update the allowlist and restart the bot when needed. Changes to the environment take effect after restart.
+Spaces around IDs and duplicates are accepted. Missing, empty, malformed, zero, or out-of-range values stop startup. Messages from other chats are silently discarded before command handlers run, including `/start` and `/help` in private chats. The restriction covers all message handlers; new update types must receive equivalent access control before being enabled. Group-to-supergroup migration changes the chat ID, so update the allowlist and restart the bot when needed. Changes to the environment take effect after restart.
 
 The allowlist identifies trusted administrator chats. Every participant in an allowed chat can use server control, including anonymous senders. No per-user ID list or Telegram administrator-role check is required; whitelist administration is still pending.
 

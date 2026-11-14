@@ -202,7 +202,7 @@ For a manual redeployment, use **Actions → CI/CD → Run workflow → main**. 
 
 The deploy script validates settings in an isolated container before stopping the current bot. It writes the runtime file, saves the last successful image/configuration for rollback, runs Compose, and checks that the process stays running without restarts for ten seconds. Deployments are serialized. Compose stops the old container before starting the replacement, so there is brief downtime but no intentional overlap of two polling processes.
 
-This liveness check does not prove Telegram authentication or connectivity: polling can retry a network failure while the process stays up. Check `/start` manually in an allowed chat and verify it stays silent in a disallowed one. Disable any pre-existing webhook and stop any old bot process using the same token before the first deployment.
+This liveness check does not prove Telegram authentication or connectivity: polling can retry a network failure while the process stays up. Check `/help` (or `/start`) manually in an allowed chat and verify it stays silent in a disallowed one. Disable any pre-existing webhook and stop any old bot process using the same token before the first deployment.
 
 ## 8. Inspect, restart, or stop the bot
 
@@ -253,6 +253,14 @@ flock -u 9
 These files exist only after a successful deployment has been replaced or a later deployment has been attempted. On a failed first deployment there is no previous version: fix configuration/code and rerun. Review logs and test `/start` after rollback. If the previous token has been revoked, supply its replacement via GitHub and redeploy instead.
 
 After a rollback, a new push/manual run on main deploys main again. Revert the problematic code in Git before deploying it again. Do not prune the images named by `current-image` or `previous-image`. Docker build cache and unused images need periodic disk maintenance; this workflow deliberately does not run broad prune commands on a VM that may host Minecraft.
+
+## Help and command suggestions
+
+The bot registers help/start/server_start/server_stop with Russian descriptions for every allowed chat when polling starts. `/help` and `/start` show the same Russian instructions. After deploying, type `/` in an allowed chat; reopen the chat if suggestions have not refreshed. If no menu appears, check bot logs for `Could not register command menu`, confirm the bot belongs to the allowed chat, and restart after fixing access. The commands still work when typed manually if menu registration failed. There is no need to configure BotFather for the automatic menu; existing more-specific language/member menus set externally can take precedence and must be removed or updated separately.
+
+The repository remains English except for the user-requested Russian help and menu strings in `src/mcwl_tg_manager/messages.py`.
+
+If `/server_start` reports a Docker failure and `sudo docker ps -a --filter 'name=^/mc$'` returns no container, the host helper has nothing to start. Its systemd service can be healthy while mc does not exist. In the original Minecraft Compose directory, run `sudo docker compose up -d mc` once, then inspect `sudo docker logs --tail=100 mc`. Use the Minecraft Compose file, not the bot deployment file. Preserve the existing `./data` directory and its Compose-relative location to keep using the intended world. This creates and starts mc; `/server_start` may then report that it is already running. The bot intentionally cannot create or remove containers.
 
 ## Troubleshooting
 
