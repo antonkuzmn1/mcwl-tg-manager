@@ -8,7 +8,7 @@ from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import BotCommand, BotCommandScopeChat, Message
 
 from mcwl_tg_manager.config import Settings
-from mcwl_tg_manager.messages import COMMAND_DESCRIPTIONS, HELP_MESSAGE
+from mcwl_tg_manager.messages import COMMAND_DESCRIPTIONS, HELP_MESSAGE, READINESS_ERRORS, SERVER_READY, SERVER_STARTING
 from mcwl_tg_manager.middleware import AllowedChatsMiddleware
 from mcwl_tg_manager.server import ServerController, ServerControlError
 
@@ -39,11 +39,14 @@ def create_dispatcher(
             await message.answer(f"Usage: /{command.command}")
             return
         action = "start" if command.command == "server_start" else "stop"
-        await message.answer("Starting server container..." if action == "start" else "Stopping server container...")
+        await message.answer(SERVER_STARTING if action == "start" else "Stopping server container...")
         try:
             result = await server.change_state(action)
+            if action == "start":
+                await server.wait_until_ready()
+                result = SERVER_READY
         except ServerControlError as error:
-            await message.answer(str(error))
+            await message.answer(READINESS_ERRORS.get(error.code, str(error)))
             return
         await message.answer(result)
 

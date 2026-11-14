@@ -7,6 +7,7 @@ from aiogram import Bot
 from aiogram.types import Update, User
 
 from mcwl_tg_manager.bot import create_dispatcher
+from mcwl_tg_manager.messages import SERVER_READY, SERVER_STARTING, READINESS_ERRORS
 from mcwl_tg_manager.server import ServerControlError
 
 TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
@@ -14,10 +15,11 @@ TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
     async def dispatch(self, text, *, chat_id=-42, sender_id=42, anonymous=False, is_bot=False,
-                       error=None):
+                       error=None, readiness_error=None):
         controller = AsyncMock()
         controller.change_state.return_value = "Operation completed."
         controller.change_state.side_effect = error
+        controller.wait_until_ready.side_effect = readiness_error
         bot = Bot(TOKEN)
         bot._me = User(id=123456789, is_bot=True, first_name="Test", username="mcwl_test_bot")
         message = {"message_id": 1, "date": 0,
@@ -41,12 +43,18 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(text=text):
                 controller, replies = await self.dispatch(text)
                 controller.change_state.assert_awaited_once_with(action)
-                self.assertEqual(replies[-1], "Operation completed.")
+                self.assertEqual(replies[-1], SERVER_READY if action == "start" else "Operation completed.")
+                if action == "start":
+                    controller.wait_until_ready.assert_awaited_once()
+                    self.assertEqual(replies[0], SERVER_STARTING)
+                else:
+                    controller.wait_until_ready.assert_not_awaited()
 
     async def test_other_chats_are_silently_ignored(self):
         controller, replies = await self.dispatch("/server_stop", chat_id=-99)
         controller.change_state.assert_not_awaited()
         self.assertEqual(replies, [])
+        controller.wait_until_ready.assert_not_awaited()
 
     async def test_chat_members_and_anonymous_senders_need_no_user_allowlist(self):
         for options in ({"sender_id": 99}, {"anonymous": True}, {"sender_id": None}, {"is_bot": True}):
@@ -67,3 +75,15 @@ class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
         controller, replies = await self.dispatch("/server_stop", error=ServerControlError("Docker is unavailable."))
         controller.change_state.assert_awaited_once_with("stop")
         self.assertEqual(replies[-1], "Docker is unavailable.")
+        controller.wait_until_ready.assert_not_awaited()
+        self.assertNotIn(SERVER_READY, replies)
+
+    async def test_readiness_failure_never_sends_ready_notification(self):
+        for code in ("readiness_timeout", "readiness_stopped", "readiness_restarted"):
+            with self.subTest(code=code):
+                controller, replies = await self.dispatch(
+                    "/server_start", readiness_error=ServerControlError("Not ready.", code)
+                )
+                controller.wait_until_ready.assert_awaited_once()
+                self.assertNotIn(SERVER_READY, replies)
+                self.assertEqual(replies[-1], READINESS_ERRORS[code])

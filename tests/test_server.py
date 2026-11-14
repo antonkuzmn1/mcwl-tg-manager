@@ -106,6 +106,57 @@ class ServerControllerTests(unittest.IsolatedAsyncioTestCase):
         await writer.wait_closed()
         self.host.docker.assert_not_awaited()
 
+    async def test_readiness_socket_operation_returns_only_after_current_run_is_ready(self):
+        state = ("a" * 64, "running", "2026-11-14T19:42:10.123456789Z")
+        self.host.snapshot = AsyncMock(return_value=state)
+        self.host.ready_in_logs = AsyncMock(return_value=True)
+        await self.client.wait_until_ready()
+        self.host.ready_in_logs.assert_awaited_once_with(state[2])
+        self.assertEqual(self.host.snapshot.await_count, 2)
+
+    async def test_readiness_rejects_restarts_and_stopped_containers_even_with_done(self):
+        original = ("a" * 64, "running", "2026-11-14T19:42:10Z")
+        for changed, code in (
+            (("a" * 64, "exited", original[2]), "readiness_stopped"),
+            (("a" * 64, "running", "2026-11-14T19:43:10Z"), "readiness_restarted"),
+            (("b" * 64, "running", original[2]), "readiness_restarted"),
+        ):
+            with self.subTest(code=code, changed=changed):
+                self.host.snapshot = AsyncMock(side_effect=[original, changed])
+                self.host.ready_in_logs = AsyncMock(return_value=True)
+                with self.assertRaises(ServerControlError) as error:
+                    await self.client.wait_until_ready()
+                self.assertEqual(error.exception.code, code)
+
+    async def test_readiness_has_bounded_wait_and_does_not_require_done_to_fail(self):
+        self.host.snapshot = AsyncMock(return_value=("a" * 64, "running", "2026-11-14T19:42:10Z"))
+        self.host.ready_in_logs = AsyncMock(return_value=False)
+        with self.assertRaises(helper.ControlError) as error:
+            await self.host.wait_until_ready(timeout=0.01, interval=0.001)
+        self.assertEqual(error.exception.code, "readiness_timeout")
+
+    async def test_stop_remains_available_during_readiness_wait(self):
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        state = ["running"]
+        self.host.snapshot = AsyncMock(side_effect=lambda: ("a" * 64, state[0], "2026-11-14T19:42:10Z"))
+        async def loading(started_at):
+            entered.set()
+            await release.wait()
+            return True
+        self.host.ready_in_logs = AsyncMock(side_effect=loading)
+        self.host.docker.return_value = "running"
+        task = asyncio.create_task(self.client.wait_until_ready())
+        try:
+            await entered.wait()
+            self.assertEqual(await self.client.change_state("stop"), "Server container stopped.")
+        finally:
+            # Docker may still report running while its stop request is taking effect.
+            release.set()
+            with self.assertRaisesRegex(ServerControlError, "stopped before"):
+                await task
+
+
 
 class DockerProcessTests(unittest.IsolatedAsyncioTestCase):
     async def test_fixed_docker_host_and_no_shell(self):
@@ -129,9 +180,70 @@ class DockerProcessTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import Mock
         process = AsyncMock()
         process.kill = Mock()
-        process.communicate.side_effect = TimeoutError
+        process.communicate.side_effect = [TimeoutError, (b"", None)]
         with patch.object(helper.asyncio, "create_subprocess_exec", return_value=process):
             with self.assertRaisesRegex(helper.ControlError, "may still complete"):
                 await helper.HostController().docker("stop", "--time", "120", "mc")
         process.kill.assert_called_once()
-        process.wait.assert_awaited_once()
+        self.assertEqual(process.communicate.await_count, 2)
+
+
+class ReadinessLogTests(unittest.IsolatedAsyncioTestCase):
+    async def test_streamed_marker_can_span_chunks_and_ansi_codes(self):
+        from unittest.mock import Mock
+        process = AsyncMock()
+        process.kill = Mock()
+        process.communicate.return_value = (b"", None)
+        process.stdout.read.side_effect = [
+            b"[INFO] Preparing level\n", b"[INFO] \x1b[32mDone (30.",
+            b'522s)! For help, type "help"\x1b[0m\n',
+        ]
+        timestamp = "2026-11-14T19:42:10.123456789Z"
+        with patch.object(helper.asyncio, "create_subprocess_exec", return_value=process) as spawn:
+            self.assertTrue(await helper.HostController().ready_in_logs(timestamp))
+        self.assertEqual(spawn.call_args.args, (*helper.DOCKER, "logs", "--since", timestamp, "mc"))
+        process.kill.assert_called_once()
+
+    async def test_no_marker_is_not_ready_and_failed_log_reads_are_errors(self):
+        from unittest.mock import Mock
+        for returncode in (0, 1):
+            with self.subTest(returncode=returncode):
+                process = AsyncMock()
+                process.kill = Mock()
+                process.returncode = returncode
+                process.communicate.return_value = (b"", None)
+                process.stdout.read.side_effect = [b"Preparing level world\n", b""]
+                with patch.object(helper.asyncio, "create_subprocess_exec", return_value=process):
+                    if returncode:
+                        with self.assertRaises(helper.ControlError):
+                            await helper.HostController().ready_in_logs("2026-11-14T19:42:10Z")
+                    else:
+                        self.assertFalse(await helper.HostController().ready_in_logs("2026-11-14T19:42:10Z"))
+
+    async def test_snapshot_reads_identity_and_started_at_from_only_mc(self):
+        host = helper.HostController()
+        host.docker = AsyncMock(return_value="a" * 64 + " running 2026-11-14T19:42:10.123456789Z")
+        result = await host.snapshot()
+        self.assertEqual(result[1], "running")
+        host.docker.assert_awaited_once_with(
+            "inspect", "--format", "{{.Id}} {{.State.Status}} {{.State.StartedAt}}", "mc", timeout=10
+        )
+
+    async def test_cancelled_log_scan_kills_only_the_reader_cli(self):
+        from unittest.mock import Mock
+        entered = asyncio.Event()
+        async def blocked_read(size):
+            entered.set()
+            await asyncio.Event().wait()
+        process = AsyncMock()
+        process.kill = Mock()
+        process.stdout.read.side_effect = blocked_read
+        process.communicate.return_value = (b"", None)
+        with patch.object(helper.asyncio, "create_subprocess_exec", return_value=process):
+            task = asyncio.create_task(helper.HostController().ready_in_logs("2026-11-14T19:42:10Z"))
+            await entered.wait()
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        process.kill.assert_called_once()
+        process.communicate.assert_awaited_once()

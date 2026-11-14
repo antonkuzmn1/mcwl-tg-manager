@@ -2,7 +2,7 @@
 
 ## Language
 
-Use English for all project content, including code, comments, documentation, configuration descriptions, and user-facing messages. Exception explicitly requested by the user: Russian Telegram help text and command-menu descriptions belong in src/mcwl_tg_manager/messages.py. Keep all other project content in English.
+Use English for all project content, including code, comments, documentation, configuration descriptions, and user-facing messages. Exception explicitly requested by the user: Russian Telegram help text, readiness notifications, and command-menu descriptions belong in src/mcwl_tg_manager/messages.py. Keep all other project content in English.
 
 ## Project context
 
@@ -33,5 +33,5 @@ Install the locked environment with `uv sync --locked`. Run offline tests with `
 
 - Never commit credentials, Telegram tokens, RCON passwords, or real deployment secrets.
 - Require TELEGRAM_ALLOWED_CHAT_IDS and silently ignore messages from other chats, including private chats. Apply equivalent access control before enabling new update types. Allowed chats are trusted administrator chats: every participant, including anonymous chat senders, may use server control. Do not introduce per-user ID lists or Telegram administrator-role checks unless the user requests them. Deny commands outside the chat allowlist by default.
-- Expose only the intended whitelist operations and fixed start/stop operations for mc; do not add arbitrary remote console execution, user-supplied Docker arguments, or a host Docker socket mount in the bot. Host lifecycle operations belong in the restricted helper service.
+- Expose only the intended whitelist operations and fixed start/stop operations and read-only readiness checks for mc; do not add arbitrary remote console execution, user-supplied Docker arguments, or a host Docker socket mount in the bot. Host lifecycle operations belong in the restricted helper service.
 - Do not push, deploy, or contact live Telegram/Minecraft services unless requested.

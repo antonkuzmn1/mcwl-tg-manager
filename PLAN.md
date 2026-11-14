@@ -25,7 +25,7 @@ Acceptance: configured private, group, and supergroup chats receive replies; oth
 
 ## 0.3. Server lifecycle commands — complete; host setup pending
 
-Scope: add /server_start and /server_stop for the existing Docker container named mc. Require an allowed administrator chat; all its participants are authorized. Use an asynchronous client for a restricted host helper with only two fixed Docker CLI operations; never accept container names or arbitrary commands from Telegram.
+Scope: add /server_start and /server_stop for the existing Docker container named mc. Require an allowed administrator chat; all its participants are authorized. Use an asynchronous client for a restricted host helper with fixed Docker lifecycle operations; never accept container names or arbitrary commands from Telegram.
 
 Acceptance: offline tests cover allowed/denied/anonymous senders, malformed commands, successful/idempotent start/stop, missing container, API errors, connection failure, timeout, and concurrent requests. Stop grants a 120-second graceful shutdown window. Deployment passes allowed chat IDs and the restricted control socket group, documents host-helper setup and the socket privilege boundary, and does not operate a real Minecraft container during verification.
 
@@ -40,6 +40,12 @@ Acceptance: lifecycle commands work for different members and anonymous senders 
 Scope: replace the placeholder with Russian /help instructions; /start opens the same help. Register help/start/server_start/server_stop commands with Russian descriptions for each allowed chat during polling startup. Keep source documentation in English, with an explicit exception for requested Russian help/menu text. Explain the missing mc container and one-time creation from the existing Minecraft Compose directory.
 
 Acceptance: help/start routes work in allowed private/group chats and stay silent elsewhere. Startup registers chat-scoped menus, and a Telegram API failure for one menu does not disable polling or remaining menus. Tests mock all Telegram calls; no live Minecraft container is created or changed.
+
+## 0.6. Minecraft readiness notification — complete; host-helper upgrade pending
+
+Scope: after /server_start, asynchronously wait up to five minutes for the Paper Done marker from the current container run, then notify the requesting chat in Russian. Extend the restricted host helper with a read-only wait_ready operation; do not expose Docker or raw logs to the bot.
+
+Acceptance: ignore previous runs using Docker StartedAt, pin container ID/start time and reject restart/replacement/exit during waiting, bound CLI/client/wait timeouts, keep stop available during loading, scan logs without buffering full history, and cover success/failure/concurrency with offline tests. Document the required manual host-helper update before redeploying the bot.
 
 ## 1. Configuration — partially complete
 

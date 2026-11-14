@@ -116,7 +116,7 @@ exit
 
 ## 5a. Install the restricted server control helper
 
-Complete this step before deploying this version. The bot must not receive the host Docker API socket. Instead, it connects to a narrow Unix-socket helper whose only operations are start and stop for the existing container `mc`. The helper uses the existing runner account's Docker access; its Python script and systemd unit are installed as root-owned files. No new TCP port is opened.
+Complete this step before deploying this version. The bot must not receive the host Docker API socket. Instead, it connects to a narrow Unix-socket helper whose only operations are start, stop, and read-only readiness checks for the existing container `mc`. The helper uses the existing runner account's Docker access; its Python script and systemd unit are installed as root-owned files. No new TCP port is opened.
 
 From the local project root on your own computer, upload the two setup files using your existing SSH key:
 
@@ -165,9 +165,31 @@ docker compose up -d mc
 
 Do not run that command in the bot deployment directory. The helper cannot create or remove containers; `docker compose down` removes `mc` and requires manual creation again. The bot can start it after a normal stop. Add `stop_grace_period: 120s` to the Minecraft service if you also want a longer shutdown grace period for manual Compose stops; the helper passes its own 120-second Docker timeout.
 
-After deployment, try `/server_start` or `/server_stop` in an allowed chat. Start means that Docker started the container, not that Minecraft finished loading. Stop allows graceful shutdown for up to 120 seconds, after which Docker can force termination. Only one operation runs at a time; after a timeout the daemon may still finish the operation, so inspect state before trying again.
+After deployment, try `/server_start` or `/server_stop` in an allowed chat. The bot reports loading first and sends a Russian ready notification only after the current run emits its Paper Done marker. Readiness waits up to five minutes, checks for stop/restart, and leaves /server_stop available during loading. Stop allows graceful shutdown for up to 120 seconds, after which Docker can force termination. Only one operation runs at a time; after a timeout the daemon may still finish the operation, so inspect state before trying again.
 
 When a future change modifies the host helper or unit, reinstall the reviewed files using the commands above and run `sudo systemctl restart mcwl-control`. Ordinary bot deployments do not overwrite the root-owned helper or restart Minecraft. Inspect helper logs privately using `sudo journalctl -u mcwl-control -n 100 --no-pager`.
+
+## Updating the helper for readiness notifications
+
+Existing installations must update `server_control.py` before deploying the bot with readiness support. The bot calls the new read-only `wait_ready` operation; an older helper only understands start/stop. No new secrets or systemd unit changes are required.
+
+On your local computer, from the project root:
+
+```sh
+scp -i ~/.ssh/YOUR_VM_KEY deploy/server_control.py YOUR_ADMIN_USER@YOUR_VM_IP:server_control.py
+```
+
+On the VM, as that same administrator account (for the current installation, `anton`):
+
+```sh
+sudo install -o root -g root -m 755 "$HOME/server_control.py" /opt/mcwl-control/server_control.py
+sudo systemctl restart mcwl-control
+sudo systemctl status mcwl-control --no-pager
+```
+
+Then push the bot update or run the normal main deployment workflow. In an allowed chat, send `/server_start`. The bot sends a Russian loading message followed by a ready message once the current run's Done marker is found. If mc is already running, it checks that run's logs and confirms readiness without restarting the server. Test `/server_stop` during loading only when stopping the server is acceptable; the pending readiness request should report that it stopped instead of sending a ready notification.
+
+The helper reads only mc's logs since Docker StartedAt, checks container identity/start time around each read, and does not return logs to Telegram. The maximum readiness wait is five minutes with three-second polling; a stop or restart cancels confirmation. Startup logs must remain available. A timeout does not stop Minecraft, which may still finish loading later. This notification confirms the Paper startup marker, not external connectivity, and is triggered only by /server_start. Pending notifications are not persisted if the bot/helper restarts.
 
 ## 6. Add secrets and variables
 
