@@ -1,0 +1,21 @@
+name: mcwl-tg-manager
+services:
+  bot:
+    image: ${MCWL_IMAGE:?MCWL_IMAGE must be set}
+    env_file:
+      - path: ${BOT_ENV_FILE:?BOT_ENV_FILE must be set}
+        format: raw
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

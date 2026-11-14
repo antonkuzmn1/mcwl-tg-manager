@@ -2,30 +2,31 @@
 
 ## Current state
 
-- The Python 3.12+ application uses aiogram 3 and asyncio with long polling.
-- The only handler is /start in explicitly allowed chats, including commands addressed to the bot in groups. It replies: "Hello! Minecraft whitelist management is coming soon."
-- TELEGRAM_ALLOWED_CHAT_IDS is a required comma-separated list of numeric chat IDs. Missing, empty, malformed, zero, or out-of-range IDs prevent startup; whitespace and duplicates are supported. Message-level outer middleware silently rejects disallowed chats before handlers run. Private chats need explicit inclusion.
-- Other messages and commands are ignored. No Minecraft/RCON operations or privileged commands exist.
-- TELEGRAM_BOT_TOKEN is required in the process environment. Missing or malformed values fail without printing the token. .env.example contains no credentials; .env files are not loaded automatically.
-- Dependencies are locked in uv.lock. README.md documents installation, startup, verification, AI authorship, and future runtime secret injection.
-- The HTTP session closes after polling exits or fails. aiogram handles SIGINT/SIGTERM during polling.
-- All project content must be in English. Completed agent changes must use Conventional Commits.
+- The asynchronous aiogram bot responds only to /start in configured chats. No RCON or privileged whitelist operations exist.
+- TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_CHAT_IDS are required environment variables. Runtime configuration validation and chat access middleware are covered by offline tests.
+- .github/workflows/pipeline.yml runs hosted tests on Python 3.12/3.14, workflow lint, and deployment syntax checks. Main pushes/manual runs deploy only after tests pass, using a Linux self-hosted runner labeled mcwl-production and the production environment.
+- The deploy job builds a commit-tagged local Docker image, validates settings without network access, writes private runtime configuration outside checkout, and replaces the Compose bot container. It checks process liveness and retains the last successful deployment for manual rollback. Deployments are serialized; failed deployments are not automatically rolled back.
+- Actions are pinned by commit and Docker base images by digest. The bot container runs as a non-root user with a read-only root filesystem and no published ports.
+- docs/DEPLOYMENT.md contains the manual SSH, Docker, runner-service, GitHub secrets/variables, logs, troubleshooting, and rollback procedure. README.md links to it.
+- All repository content is English. Completed agent changes use Conventional Commits.
 
 ## Latest verification
 
-- `uv sync` installed the application and locked dependencies successfully with Python 3.14.6.
-- `.venv/bin/python -m unittest discover -s tests -v`: 9 tests passed, including token/chat ID validation, allowed and denied private/group/supergroup routing, ignored messages, and session cleanup on normal exit and failure.
-- The installed entry point exits with the expected error when TELEGRAM_BOT_TOKEN is missing.
-- Local Markdown links, English-only source/documentation content, and `git diff --check` passed.
-- No real token was used. Telegram polling and signal handling have not been verified against a live service. No Minecraft service was contacted.
+- 13 offline tests passed on local Python 3.14.6 and on Python 3.12.16 inside the image with networking disabled. Deployment-flow tests use fake Docker/flock/sleep commands, not a live host deployment.
+- Docker image build succeeded. Runtime configuration loaded in a network-disabled, read-only container as its default non-root user.
+- actionlint v1.7.7 passed with the custom runner label configuration.
+- Bash syntax, Docker Compose configuration, local Markdown links, English-only source/documentation content, and git diff --check passed.
+- No real Telegram token was used. No GitHub settings were changed, no code was pushed, and no VM was contacted. The actual GitHub-hosted workflow, runner service, and production deployment remain unverified until manual setup.
 
 ## Open questions and blockers
 
-- No blockers for the chat-restricted /start placeholder.
-- GitHub Actions, secret storage/delivery, and VM service configuration remain to be selected. No CI/CD, Docker configuration, or deployment has been added.
-- Production polling must run as a single instance per token; an existing webhook must be disabled before polling.
-- RCON library, connection settings, and user-level authorization for future whitelist commands remain unimplemented. All members of allowed chats can use /start. New update types must receive equivalent chat access control before being enabled.
+- User must confirm the VM OS/architecture and provision Docker plus the runner. The guide assumes private-repository Ubuntu/systemd with SSH key access and administrator sudo.
+- GitHub environment secrets/protection features depend on the plan; the guide describes repository-level fallback and removal of the environment line if environments are unavailable.
+- The runner Docker account has broad host privileges; only trusted workflows/contributors should have access. Do not enable untrusted PRs on the production runner.
+- User must set the production TELEGRAM_BOT_TOKEN secret and TELEGRAM_ALLOWED_CHAT_IDS variable, push main, and verify /start manually. Runtime/backed-up secrets are private files on the VM and remain readable to Docker administrators.
+- Docker process liveness does not establish successful Telegram connectivity. A pre-existing webhook or duplicate polling process must be removed before production startup.
+- Minecraft network integration, RCON, and user-level whitelist authorization remain future work.
 
 ## Next step
 
-Wait for the next user-requested task. PLAN.md records the remaining configuration, RCON, authorization, deployment, and CI/CD work. Do not implement a milestone automatically.
+User follows docs/DEPLOYMENT.md manually and reports the first workflow/deployment result. Do not access their VM, push code, or change GitHub settings without a new request.

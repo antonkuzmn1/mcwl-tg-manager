@@ -50,20 +50,27 @@ Acceptance: tests cover command construction, invalid names, authentication fail
 
 Acceptance: tests cover allowed and denied requests, malformed commands, and RCON failures. Denied requests never reach RCON. Bot startup and shutdown are documented.
 
-## 4. Docker deployment — planned
+## 4. Docker deployment — partially complete
 
-- Add a bot image and Compose integration alongside the existing Minecraft service.
+- [x] Add a bot image and standalone Compose deployment.
+- [ ] Connect the bot deployment to Minecraft when implementing RCON.
 - Connect to mc:25575 over the Compose network without publishing the RCON port.
 - Document credentials, startup, logs, and offline-mode limitations.
 
 Acceptance: image build and Compose validation pass where Docker is available. Live verification is performed only when requested and configured; unavailable checks are explicitly recorded.
 
-## 5. Automated checks and VM delivery — planned
+## 5. Automated checks and VM delivery — implementation complete; manual provisioning pending
 
-- Add CI for the automated tests and selected code-quality checks.
-- Agree on GitHub Actions, secret storage, and VM deployment details before implementation.
-- Inject the Telegram token into the runtime environment; do not embed secrets in source or images.
-- Run only one polling instance per token and stop the previous instance before replacement.
-- Document the commands used locally and in CI.
+Implemented scope: add hosted CI and a main-only Docker deployment job on a Linux self-hosted runner labeled mcwl-production. Provide manual Ubuntu setup, GitHub secret/variable placement, first-deploy, troubleshooting, and rollback instructions. Do not configure GitHub or contact the VM automatically.
+
+Acceptance: offline tests and workflow lint pass; Docker configuration validates; image build is checked if a daemon is available. Deploy requires successful CI for the same commit, never runs for PRs, serializes production changes, validates runtime configuration before replacing the service, and keeps secrets outside checkout/images. Document live checks that remain manual.
+
+
+- [x] Add hosted CI for automated tests, workflow lint, and deployment syntax checks.
+- [x] Provide GitHub Actions configuration and a manual Linux runner/Docker setup guide.
+- [ ] User: provision the runner, configure GitHub settings, push main, and verify live deployment.
+- [x] Inject the Telegram token from GitHub secrets into a private runtime environment file outside checkout/images.
+- [x] Serialize deployment and replace the prior Compose container.
+- [x] Document local/CI commands, first deployment, logs, and manual rollback.
 
 Acceptance: CI runs without Telegram or Minecraft credentials and checks the same behavior as local tests.

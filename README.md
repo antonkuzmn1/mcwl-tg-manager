@@ -64,17 +64,24 @@ git diff --check
 
 Tests use synthetic updates and mocked Telegram requests. They do not need real credentials or a running Minecraft server.
 
-## Future deployment
+## CI/CD and VM deployment
 
-The bot reads credentials and allowed chat IDs at runtime so a future GitHub Actions workflow and VM service can inject secrets without application changes. Do not commit a real token, put it in a Docker image, or print it in pipeline logs. GitHub secrets are not yet configured. The VM runtime secret storage and delivery mechanism will be selected when deployment is implemented.
+See [the deployment guide](docs/DEPLOYMENT.md) for the full manual setup: SSH access, Docker, a dedicated GitHub self-hosted runner, production secrets/variables, deployment, logs, and rollback. It assumes a private repository and a Linux VM with systemd.
 
-Docker, CI/CD, VM provisioning, RCON, and whitelist authorization are not implemented. Deployment should replace a single polling instance and forward shutdown signals to the process.
+The CI/CD workflow runs offline tests on GitHub-hosted runners with Python 3.12 and 3.14. After both pass, main pushes or main-only manual runs build and deploy a Docker image on the production runner. PRs do not deploy. Workflow actions and container base images are pinned to immutable revisions/digests.
+
+Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` as a production environment variable. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
+
+Runtime secrets stay outside the checkout and image. The deployment validates configuration before replacing the service and checks process liveness afterward; verify actual Telegram connectivity with `/start` manually. RCON and whitelist administration are not implemented.
 
 ## Project structure
 
 - `src/mcwl_tg_manager/`: configuration, async application, and entry point.
 - `tests/`: offline configuration, command routing, and lifecycle tests.
 - `pyproject.toml` and `uv.lock`: dependency declaration and locked environment.
+- `.github/workflows/pipeline.yml`: hosted CI and production-runner deployment.
+- `Dockerfile`, `deploy/`, and `scripts/`: container packaging and deployment helpers.
+- `docs/DEPLOYMENT.md`: manual infrastructure setup and operations guide.
 
 ## Development workflow
 

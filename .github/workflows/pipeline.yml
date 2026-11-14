@@ -1,0 +1,61 @@
+name: CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.11.21'
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked
+      - run: uv run --locked python -m unittest discover -s tests -v
+      - name: Lint workflow
+        if: matrix.python == '3.12'
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: Check deployment syntax
+        run: |
+          bash -n scripts/deploy.sh
+          MCWL_IMAGE=mcwl-tg-manager:test BOT_ENV_FILE=/dev/null docker compose -f deploy/compose.yml config --quiet
+          git diff --check
+
+  deploy:
+    name: Deploy production
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, Linux, mcwl-production]
+    environment: production
+    timeout-minutes: 20
+    concurrency:
+      group: mcwl-production
+      cancel-in-progress: false
+    env:
+      MCWL_IMAGE: mcwl-tg-manager:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build the tested revision
+        run: docker build --pull --tag "$MCWL_IMAGE" .
+      - name: Deploy
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ALLOWED_CHAT_IDS: ${{ vars.TELEGRAM_ALLOWED_CHAT_IDS }}
+        run: bash scripts/deploy.sh

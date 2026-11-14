@@ -27,7 +27,7 @@ This project will manage a Minecraft server whitelist from Telegram through RCON
 
 ## Checks
 
-Install the locked environment with `uv sync --locked`. Run offline tests with `uv run --locked python -m unittest discover -s tests -v` and check whitespace with `git diff --check`. CI is not implemented yet. Do not start the bot during verification without explicit authorization to contact Telegram. Documentation-only changes require link/content checks and `git diff --check`; application tests are unnecessary unless behavior changes.
+Install the locked environment with `uv sync --locked`. Run offline tests with `uv run --locked python -m unittest discover -s tests -v` and check whitespace with `git diff --check`. GitHub-hosted CI runs these tests on Python 3.12 and 3.14. Validate deployment edits with `bash -n scripts/deploy.sh`, actionlint v1.7.7 (custom runner labels are in .github/actionlint.yaml), and `MCWL_IMAGE=mcwl-tg-manager:test BOT_ENV_FILE=/dev/null docker compose -f deploy/compose.yml config --quiet`. Build the image after Dockerfile changes when Docker is available. See docs/DEPLOYMENT.md for deployment operations. Do not start the bot during verification without explicit authorization to contact Telegram. Documentation-only changes require link/content checks and `git diff --check`; application tests are unnecessary unless behavior changes.
 
 ## Implementation boundaries
 
