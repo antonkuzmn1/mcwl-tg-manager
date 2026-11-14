@@ -17,10 +17,17 @@ Scope: implement an asynchronous aiogram bot with only /start and an English pla
 
 Acceptance: /start responds in private and group chats, unrelated messages and commands are ignored, missing or malformed tokens fail without exposing secrets, and the HTTP session closes on shutdown or polling failure. Tests use mocks and do not contact Telegram. Document future runtime secret injection and single-instance VM deployment.
 
+## 0.2. Allowed chats — complete
+
+Scope: require TELEGRAM_ALLOWED_CHAT_IDS as a comma-separated list of signed Telegram chat IDs. Apply the restriction to all message handlers, including /start.
+
+Acceptance: configured private, group, and supergroup chats receive replies; other chats are silently ignored before handlers run. Missing, empty, malformed, zero, or out-of-range IDs prevent startup. Whitespace and duplicate IDs are supported. Tests run without Telegram access.
+
 ## 1. Configuration — partially complete
 
 - [x] Load and validate the Telegram token from the process environment.
-- [ ] Add allowed user IDs, allowed chat IDs, and RCON connection settings when implementing privileged commands.
+- [x] Load and validate allowed chat IDs; enforce the allowlist before message handlers run.
+- [ ] Add allowed user IDs and RCON connection settings when implementing privileged commands.
 - Validate required values and fail with actionable errors without revealing secrets.
 - Provide a placeholder-only .env.example and configuration documentation.
 

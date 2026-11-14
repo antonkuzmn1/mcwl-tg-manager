@@ -32,6 +32,6 @@ Install the locked environment with `uv sync --locked`. Run offline tests with `
 ## Implementation boundaries
 
 - Never commit credentials, Telegram tokens, RCON passwords, or real deployment secrets.
-- The public /start placeholder requires no authorization. Future privileged commands must use explicit authorization and deny access by default.
+- Require TELEGRAM_ALLOWED_CHAT_IDS and silently ignore messages from other chats, including private chats. Apply equivalent access control before enabling new update types. Future privileged commands also require explicit user authorization and must deny access by default.
 - Expose only the intended whitelist operations; do not add arbitrary remote console execution.
 - Do not push, deploy, or contact live Telegram/Minecraft services unless requested.
