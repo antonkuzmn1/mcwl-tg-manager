@@ -86,7 +86,7 @@ class RoutingTests(unittest.IsolatedAsyncioTestCase):
                 method = request.call_args.args[1]
                 self.assertIsInstance(method, SendMessage)
                 self.assertEqual(method.text, HELP_MESSAGE)
-                self.assertEqual(len(method.text.splitlines()), 3)
+                self.assertEqual(len(method.text.splitlines()), 6)
                 self.assertNotIn("/start", method.text)
 
     async def test_disallowed_chats_never_reach_the_handler(self):
@@ -105,7 +105,7 @@ class RoutingTests(unittest.IsolatedAsyncioTestCase):
         request.assert_not_awaited()
 
     async def test_unrelated_messages_and_commands_are_ignored(self):
-        for text in ("hello", "/unknown", "/wl_add Steve", "/start@another_bot", "/help@another_bot"):
+        for text in ("hello", "/unknown", "/start@another_bot", "/help@another_bot", "/wl_add@another_bot Steve"):
             with self.subTest(text=text):
                 request = await self.check_message(text)
                 request.assert_not_awaited()
@@ -135,7 +135,7 @@ class CommandMenuTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({call.kwargs["scope"].chat_id for call in bot.set_my_commands.await_args_list}, {-42, 99})
         for call in bot.set_my_commands.await_args_list:
             self.assertEqual([command.command for command in call.args[0]],
-                             ["help", "server_start", "server_stop"])
+                             ["help", "server_start", "server_stop", "wl_list", "wl_add", "wl_remove"])
             self.assertTrue(all(command.description for command in call.args[0]))
 
     async def test_menu_failure_is_logged_and_remaining_chats_are_attempted(self):

@@ -1,4 +1,4 @@
-"""Verify both chat and chat authorization before any host-helper request."""
+"""Verify chat authorization before any host-helper request."""
 
 import unittest
 from unittest.mock import AsyncMock, patch
@@ -11,18 +11,21 @@ from mcwl_tg_manager.messages import (
     SERVER_READY, SERVER_STARTING, READINESS_ERRORS, SERVER_STOPPING,
     SERVER_STOPPED, SERVER_ALREADY_STOPPED, SERVER_STOP_FAILED, COMMAND_USAGE,
 )
-from mcwl_tg_manager.server import ServerControlError
+from mcwl_tg_manager.server import ServerControlError, WhitelistResult
 
 TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
 
 
 class ServerCommandTests(unittest.IsolatedAsyncioTestCase):
     async def dispatch(self, text, *, chat_id=-42, sender_id=42, anonymous=False, is_bot=False,
-                       error=None, readiness_error=None, result="Operation completed."):
+                       error=None, readiness_error=None, result="Operation completed.",
+                       whitelist_result=None, whitelist_error=None):
         controller = AsyncMock()
         controller.change_state.return_value = result
         controller.change_state.side_effect = error
         controller.wait_until_ready.side_effect = readiness_error
+        controller.whitelist.return_value = whitelist_result or WhitelistResult("listed", ())
+        controller.whitelist.side_effect = whitelist_error
         bot = Bot(TOKEN)
         bot._me = User(id=123456789, is_bot=True, first_name="Test", username="mcwl_test_bot")
         message = {"message_id": 1, "date": 0,

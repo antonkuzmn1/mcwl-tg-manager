@@ -12,9 +12,11 @@ from mcwl_tg_manager.messages import (
     COMMAND_DESCRIPTIONS, COMMAND_USAGE, HELP_MESSAGE, READINESS_ERRORS,
     SERVER_ALREADY_STOPPED, SERVER_READY, SERVER_STARTING, SERVER_STOP_FAILED,
     SERVER_STOPPED, SERVER_STOPPING,
+    WHITELIST_EMPTY, WHITELIST_HEADER, WHITELIST_INVALID_NAME, WHITELIST_USAGE,
+    WHITELIST_RESULTS, WHITELIST_FAILED, WHITELIST_ERRORS,
 )
 from mcwl_tg_manager.middleware import AllowedChatsMiddleware
-from mcwl_tg_manager.server import ServerController, ServerControlError
+from mcwl_tg_manager.server import PLAYER_NAME, ServerController, ServerControlError
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +62,41 @@ def create_dispatcher(
             return
         await message.answer(result)
 
+    async def handle_whitelist(message: Message, command: CommandObject) -> None:
+        action = command.command.removeprefix("wl_")
+        player = (command.args or "").strip()
+        if action == "list" and player:
+            await message.answer(WHITELIST_USAGE[action])
+            return
+        if action != "list" and not PLAYER_NAME.fullmatch(player):
+            await message.answer(WHITELIST_USAGE[action] + "\n" + WHITELIST_INVALID_NAME)
+            return
+        try:
+            result = await server.whitelist(action, player if action != "list" else None)
+        except ServerControlError as error:
+            logger.warning("Whitelist operation failed: %s", error)
+            await message.answer(WHITELIST_ERRORS.get(error.code, WHITELIST_FAILED))
+            return
+        if action == "list":
+            if not result.players:
+                await message.answer(WHITELIST_EMPTY)
+                return
+            chunk = WHITELIST_HEADER.format(count=len(result.players))
+            for name in result.players:
+                if len(chunk) + len(name) + 1 > 4000:
+                    await message.answer(chunk)
+                    chunk = name
+                else:
+                    chunk += "\n" + name
+            await message.answer(chunk)
+        else:
+            await message.answer(WHITELIST_RESULTS[result.status].format(player=result.players[0]))
+
     router = Router(name="commands")
     router.message.register(handle_help, CommandStart())
     router.message.register(handle_help, Command("help"))
     router.message.register(handle_server, Command("server_start", "server_stop"))
+    router.message.register(handle_whitelist, Command("wl_list", "wl_add", "wl_remove"))
     dispatcher = Dispatcher()
     dispatcher.message.outer_middleware(AllowedChatsMiddleware(allowed_chat_ids))
     dispatcher.include_router(router)

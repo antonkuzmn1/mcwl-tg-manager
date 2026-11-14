@@ -53,44 +53,49 @@ Scope: remove start from help and slash suggestions while keeping it as an unadv
 
 Acceptance: the registered menu contains only help/server_start/server_stop, help contains no start alias or deployment details, and stop replies are Russian for normal, idempotent, and error paths. Existing chat authorization and readiness behavior remain covered.
 
+## 0.8. Whitelist management — complete; host-helper upgrade pending
+
+Scope: add /wl_list, /wl_add <name>, and /wl_remove <name> for every member of allowed chats. Extend the restricted helper with only these validated operations through docker exec mc rcon-cli whitelist. Keep RCON credentials in Minecraft, validate ASCII player names at both trust boundaries, and require a running server. Show concise Russian replies/help/menu entries and split long lists for Telegram.
+
+Acceptance: offline tests cover routing, chat authorization, malformed names and injection attempts, exact fixed Docker arguments, list/empty list, add/remove/idempotent responses, stopped server, busy helper, RCON errors and unexpected responses, protocol validation, and long lists. Do not infer command success from CLI exit status alone. Document the manual host-helper update and existing RCON requirement without adding secrets or publishing ports.
+
 ## 1. Configuration — partially complete
 
 - [x] Load and validate the Telegram token from the process environment.
 - [x] Load and validate allowed chat IDs; enforce the allowlist before message handlers run.
 - [x] Authorize server lifecycle commands by trusted administrator chat membership.
-- [ ] Add RCON connection settings when implementing whitelist commands.
+- [x] Reuse Minecraft's existing RCON configuration through its packaged CLI; no bot-side RCON secrets are required.
 - Validate required values and fail with actionable errors without revealing secrets.
 - Provide a placeholder-only .env.example and configuration documentation.
 
 Acceptance: valid configuration loads; missing or invalid values fail clearly; authorization lists cannot silently enable public access. Configuration validation has automated tests.
 
-## 2. RCON integration — planned
+## 2. RCON integration — complete through the restricted host helper
 
-- Add an RCON client with bounded connection and response timeouts.
-- Support whitelist add, remove, and list through a narrow interface.
-- Validate player names before constructing commands.
+- [x] Invoke the packaged rcon-cli inside mc with bounded timeouts and fixed arguments.
+- [x] Support whitelist add, remove, and list through a narrow interface.
+- [x] Validate player names before constructing commands at both trust boundaries.
 
 Acceptance: tests cover command construction, invalid names, authentication failure, connection failure, and timeouts without requiring a live server. No arbitrary command interface is exposed to Telegram users.
 
-## 3. Telegram commands and authorization — planned
+## 3. Telegram commands and authorization — complete
 
-- Add /help, /wl_add, /wl_remove, and /wl_list.
+- [x] Add /help, /wl_add, /wl_remove, and /wl_list.
 - Support commands addressed to the bot in group chats.
 - Restrict commands to configured trusted administrator chats; do not add per-user restrictions without a new request.
 - Return readable validation and service error messages without leaking secrets.
 
 Acceptance: tests cover allowed and denied requests, malformed commands, and RCON failures. Denied requests never reach RCON. Bot startup and shutdown are documented.
 
-## 4. Docker deployment — partially complete
+## 4. Docker deployment — complete through the restricted helper
 
 - [x] Add a bot image and standalone Compose deployment.
-- [ ] Connect the bot deployment to Minecraft when implementing RCON.
-- Connect to mc:25575 over the Compose network without publishing the RCON port.
+- [x] Reach Minecraft through the host helper and packaged CLI without a shared bot/Minecraft network or published RCON port.
 - Document credentials, startup, logs, and offline-mode limitations.
 
 Acceptance: image build and Compose validation pass where Docker is available. Live verification is performed only when requested and configured; unavailable checks are explicitly recorded.
 
-## 5. Automated checks and VM delivery — implementation complete; manual provisioning pending
+## 5. Automated checks and VM delivery — complete; production verified by user
 
 Implemented scope: add hosted CI and a main-only Docker deployment job on a Linux self-hosted runner labeled mcwl-production. Provide manual Ubuntu setup, GitHub secret/variable placement, first-deploy, troubleshooting, and rollback instructions. Do not configure GitHub or contact the VM automatically.
 
@@ -99,7 +104,7 @@ Acceptance: offline tests and workflow lint pass; Docker configuration validates
 
 - [x] Add hosted CI for automated tests, workflow lint, and deployment syntax checks.
 - [x] Provide GitHub Actions configuration and a manual Linux runner/Docker setup guide.
-- [ ] User: provision the runner, configure GitHub settings, push main, and verify live deployment.
+- [x] User: provision the runner, configure GitHub settings, push main, and verify live deployment.
 - [x] Inject the Telegram token from GitHub secrets into a private runtime environment file outside checkout/images.
 - [x] Serialize deployment and replace the prior Compose container.
 - [x] Document local/CI commands, first deployment, logs, and manual rollback.

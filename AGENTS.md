@@ -2,11 +2,11 @@
 
 ## Language
 
-Use English for all project content, including code, comments, documentation, configuration descriptions, and user-facing messages. Exception explicitly requested by the user: Russian Telegram help text, readiness notifications, stop replies, command usage, and command-menu descriptions belong in src/mcwl_tg_manager/messages.py. Keep all other project content in English.
+Use English for all project content, including code, comments, documentation, configuration descriptions, and user-facing messages. Exception explicitly requested by the user: Russian Telegram help text, readiness notifications, stop replies, whitelist replies, command usage, and command-menu descriptions belong in src/mcwl_tg_manager/messages.py. Keep all other project content in English.
 
 ## Project context
 
-This project will manage a Minecraft server whitelist from Telegram through RCON. An asynchronous aiogram bot handles /help, its /start alias, and chat-authorized /server_start and /server_stop for the existing mc container; whitelist management is not implemented. Read README.md for setup, PLAN.md for milestones, and HANDOFF.md for current state before starting work.
+This project will manage a Minecraft server whitelist from Telegram through RCON. An asynchronous aiogram bot handles /help, its /start alias, and chat-authorized /server_start and /server_stop for the existing mc container; whitelist operations use the restricted host helper and Minecraft's packaged rcon-cli. Read README.md for setup, PLAN.md for milestones, and HANDOFF.md for current state before starting work.
 
 ## Workflow
 

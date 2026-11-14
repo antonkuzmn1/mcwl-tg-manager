@@ -116,7 +116,7 @@ exit
 
 ## 5a. Install the restricted server control helper
 
-Complete this step before deploying this version. The bot must not receive the host Docker API socket. Instead, it connects to a narrow Unix-socket helper whose only operations are start, stop, and read-only readiness checks for the existing container `mc`. The helper uses the existing runner account's Docker access; its Python script and systemd unit are installed as root-owned files. No new TCP port is opened.
+Complete this step before deploying this version. The bot must not receive the host Docker API socket. Instead, it connects to a narrow Unix-socket helper whose only operations are start, stop, read-only readiness checks, and validated whitelist operations for the existing container `mc`. The helper uses the existing runner account's Docker access; its Python script and systemd unit are installed as root-owned files. No new TCP port is opened.
 
 From the local project root on your own computer, upload the two setup files using your existing SSH key:
 
@@ -190,6 +190,34 @@ sudo systemctl status mcwl-control --no-pager
 Then push the bot update or run the normal main deployment workflow. In an allowed chat, send `/server_start`. The bot sends a Russian loading message followed by a ready message once the current run's Done marker is found. If mc is already running, it checks that run's logs and confirms readiness without restarting the server. Test `/server_stop` during loading only when stopping the server is acceptable; the pending readiness request should report that it stopped instead of sending a ready notification.
 
 The helper reads only mc's logs since Docker StartedAt, checks container identity/start time around each read, and does not return logs to Telegram. The maximum readiness wait is five minutes with three-second polling; a stop or restart cancels confirmation. Startup logs must remain available. A timeout does not stop Minecraft, which may still finish loading later. This notification confirms the Paper startup marker, not external connectivity, and is triggered only by /server_start. Pending notifications are not persisted if the bot/helper restarts.
+
+## Updating the helper for whitelist commands
+
+Install the updated `deploy/server_control.py` before deploying the bot that adds /wl_list, /wl_add, and /wl_remove. The systemd unit, bot secrets, and Compose mounts do not change. On your local computer, from the project root:
+
+```sh
+scp -i ~/.ssh/YOUR_VM_KEY deploy/server_control.py YOUR_ADMIN_USER@YOUR_VM_IP:server_control.py
+```
+
+On the VM, as that same administrator account:
+
+```sh
+sudo install -o root -g root -m 755 "$HOME/server_control.py" /opt/mcwl-control/server_control.py
+sudo systemctl restart mcwl-control
+sudo systemctl status mcwl-control --no-pager
+```
+
+Ensure Minecraft is running and verify its existing RCON setup with this read-only command:
+
+```sh
+sudo docker exec mc rcon-cli whitelist list
+```
+
+RCON is enabled by default in the image and uses its existing configuration. If it has been disabled, enable it in the original Minecraft Compose configuration before using whitelist commands. Do not publish port 25575 or add RCON credentials to the bot/GitHub for this implementation. The helper accesses the packaged CLI inside mc and never returns passwords or raw diagnostic output.
+
+Deploy the bot normally, then test `/wl_list`, `/wl_add YourPlayerName`, and `/wl_remove YourPlayerName` in the allowed administrator chat. Use an intended test player: add/remove modify the actual whitelist. A stopped server must produce a request to start it rather than a success reply. An old helper rejects the new operations until updated; if the server is still loading or RCON fails, the bot reports a failure without claiming the change succeeded.
+
+Only whitelist list/add/remove are exposed; there is no arbitrary exec/RCON interface. Names are validated in both bot/client and helper, and mutations use the native Minecraft whitelist commands. Repeated add/remove operations get explicit already-listed/not-listed responses. Unknown or plugin-modified response text is rejected; check `/wl_list` before retrying an uncertain mutation. Long lists are split into Telegram-sized messages. With offline mode, nickname ownership is not authenticated; preserve the intended spelling/case and test with the actual client.
 
 ## 6. Add secrets and variables
 
@@ -278,7 +306,7 @@ After a rollback, a new push/manual run on main deploys main again. Revert the p
 
 ## Help and command suggestions
 
-The bot registers help/server_start/server_stop with Russian descriptions for every allowed chat when polling starts. `/help` shows a three-line Russian command list; `/start` remains a hidden alias and is omitted from help and slash suggestions. After deploying, type `/` in an allowed chat; reopen the chat if suggestions have not refreshed. If no menu appears, check bot logs for `Could not register command menu`, confirm the bot belongs to the allowed chat, and restart after fixing access. The commands still work when typed manually if menu registration failed. There is no need to configure BotFather for the automatic menu; existing more-specific language/member menus set externally can take precedence and must be removed or updated separately.
+The bot registers help/server_start/server_stop/wl_list/wl_add/wl_remove with Russian descriptions for every allowed chat when polling starts. `/help` shows a concise six-line Russian command list; `/start` remains a hidden alias and is omitted from help and slash suggestions. After deploying, type `/` in an allowed chat; reopen the chat if suggestions have not refreshed. If no menu appears, check bot logs for `Could not register command menu`, confirm the bot belongs to the allowed chat, and restart after fixing access. The commands still work when typed manually if menu registration failed. There is no need to configure BotFather for the automatic menu; existing more-specific language/member menus set externally can take precedence and must be removed or updated separately.
 
 The repository remains English except for the user-requested Russian help, menu, readiness, stop, and usage strings in `src/mcwl_tg_manager/messages.py`.
 

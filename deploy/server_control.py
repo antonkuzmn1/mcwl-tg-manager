@@ -1,4 +1,4 @@
-"""Host-only helper: expose mc lifecycle and readiness, never the full Docker API."""
+"""Host-only helper for mc lifecycle, readiness, and whitelist operations."""
 
 import asyncio
 import json
@@ -133,14 +133,62 @@ class HostController:
         except asyncio.TimeoutError:
             raise ControlError("Minecraft did not become ready within five minutes.", "readiness_timeout") from None
 
+    async def whitelist(self, action: str, player: str | None = None) -> dict:
+        name_pattern = r"[A-Za-z0-9_]{1,16}"
+        if action not in ("list", "add", "remove"):
+            raise ControlError("Unsupported whitelist action.", "whitelist_invalid")
+        if ((action == "list" and player is not None)
+                or (action != "list" and (not isinstance(player, str) or not re.fullmatch(name_pattern, player)))):
+            raise ControlError("Invalid whitelist arguments.", "whitelist_invalid")
+        if self.lock.locked():
+            raise ControlError("Another server operation is in progress.", "whitelist_busy")
+        async with self.lock:
+            state = await self.docker("inspect", "--format", "{{.State.Status}}", "mc", timeout=10)
+            if state != "running":
+                raise ControlError("Minecraft must be running for whitelist operations.", "whitelist_not_running")
+            arguments = ("exec", "mc", "rcon-cli", "whitelist", action)
+            if player is not None:
+                arguments += (player,)
+            try:
+                output = await self.docker(*arguments, timeout=20)
+            except ControlError:
+                raise ControlError("The whitelist RCON command could not be confirmed.", "whitelist_unavailable") from None
+        # RCON can exit successfully even when Minecraft rejects a command.
+        text = ANSI_PATTERN.sub(b"", output.encode("utf-8")).decode("utf-8").strip()
+        text = re.sub(r"\u00a7[0-9a-fk-or]", "", text, flags=re.IGNORECASE)
+        if action == "list":
+            match = re.fullmatch(r"There are ([0-9]+) whitelisted player\(s\):\s*(.*)", text)
+            if match:
+                names = [name.strip() for name in match[2].split(",")] if match[2].strip() else []
+                if len(names) == int(match[1]) and all(re.fullmatch(name_pattern, name) for name in names):
+                    return {"status": "listed", "players": sorted(names, key=str.casefold)}
+        else:
+            verb = "Added" if action == "add" else "Removed"
+            preposition = "to" if action == "add" else "from"
+            match = re.fullmatch(rf"{verb} ({name_pattern}) {preposition} the whitelist", text)
+            if match and match[1].casefold() == player.casefold():
+                return {"status": "added" if action == "add" else "removed", "players": [match[1]]}
+            if action == "add" and text == "Player is already whitelisted":
+                return {"status": "already_listed", "players": [player]}
+            if action == "remove" and text == "Player is not whitelisted":
+                return {"status": "not_listed", "players": [player]}
+            if text == "That player does not exist":
+                raise ControlError("Minecraft could not resolve that player.", "whitelist_unknown_player")
+        raise ControlError("Unexpected whitelist response; the operation was not confirmed.", "whitelist_unexpected_response")
+
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             line = await asyncio.wait_for(reader.readline(), timeout=5)
-            if line not in (b"start\n", b"stop\n", b"wait_ready\n"):
-                raise ControlError("Unsupported server action.")
-            action = line.decode("ascii").strip()
-            message = await self.wait_until_ready() if action == "wait_ready" else await self.change_state(action)
-            result = {"ok": True, "message": message}
+            if line in (b"start\n", b"stop\n", b"wait_ready\n"):
+                action = line.decode("ascii").strip()
+                message = await self.wait_until_ready() if action == "wait_ready" else await self.change_state(action)
+                result = {"ok": True, "message": message}
+            else:
+                match = re.fullmatch(r"wl_(list|add|remove)(?: ([A-Za-z0-9_]{1,16}))?\n", line.decode("ascii"))
+                if not match:
+                    raise ControlError("Unsupported server action.")
+                data = await self.whitelist(match[1], match[2])
+                result = {"ok": True, "message": "Whitelist operation completed.", "whitelist": data}
         except (ControlError, OSError, ValueError, asyncio.TimeoutError) as error:
             message = str(error) if isinstance(error, ControlError) else "Server control service is unavailable. Contact the operator."
             result = {"ok": False, "message": message, "code": getattr(error, "code", None)}

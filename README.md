@@ -2,7 +2,7 @@
 
 An asynchronous Telegram bot built with aiogram. `/help` shows a concise Russian command list, and `/start` remains an unadvertised alias. The placeholder has been removed.
 
-The help text and slash menu list only `help`, `server_start`, and `server_stop`. On startup, the bot registers Russian command descriptions with Telegram for each allowed chat, so clients can suggest them when typing `/`. Registration failures are logged without disabling polling. Reopen the chat if the client has not refreshed the command list. No BotFather setup is required for the automatic chat-scoped menu.
+The help text and slash menu list `help`, `server_start`, `server_stop`, `wl_list`, `wl_add`, and `wl_remove`. On startup, the bot registers Russian command descriptions with Telegram for each allowed chat, so clients can suggest them when typing `/`. Registration failures are logged without disabling polling. Reopen the chat if the client has not refreshed the command list. No BotFather setup is required for the automatic chat-scoped menu.
 
 All commands require an allowed chat; unknown messages and commands are ignored. Menu visibility does not grant access: chat authorization still applies to manually entered commands.
 
@@ -51,7 +51,7 @@ Use numeric Telegram chat IDs, not usernames or invite links. Group and supergro
 
 Spaces around IDs and duplicates are accepted. Missing, empty, malformed, zero, or out-of-range values stop startup. Messages from other chats are silently discarded before command handlers run, including `/start` and `/help` in private chats. The restriction covers all message handlers; new update types must receive equivalent access control before being enabled. Group-to-supergroup migration changes the chat ID, so update the allowlist and restart the bot when needed. Changes to the environment take effect after restart.
 
-The allowlist identifies trusted administrator chats. Every participant in an allowed chat can use server control, including anonymous senders. No per-user ID list or Telegram administrator-role check is required; whitelist administration is still pending.
+The allowlist identifies trusted administrator chats. Every participant in an allowed chat can use server control, including anonymous senders. No per-user ID list or Telegram administrator-role check is required; the same chat authorization applies to whitelist commands.
 
 The bot uses long polling and needs outbound access to Telegram; no inbound HTTP port is required. Disable any existing webhook for this bot before using polling. Stop with Ctrl+C or SIGTERM; the HTTP session is closed on shutdown. Run only one polling process per token.
 
@@ -83,6 +83,22 @@ Stop progress, successful stop, already-stopped, and stop failure replies are Ru
 
 No RCON connection is required for these commands. Your Minecraft Compose file can stay as shown; optionally add `stop_grace_period: 120s` under `mc` for a similar grace period when stopping it manually through Compose. Docker's `unless-stopped` policy respects an explicit stop until the container is started again.
 
+## Whitelist commands
+
+- `/wl_list`: show the current whitelist; long lists are split across messages.
+- `/wl_add Steve`: add a player.
+- `/wl_remove Steve`: remove a player.
+
+All participants of allowed chats may use these commands, including anonymous administrators. Commands addressed to the bot in groups work as well. Names must contain 1–16 ASCII letters, digits, or underscores; case is preserved in the request. Short names are accepted for offline-mode compatibility. Existing/absent entries get explicit idempotent replies. Help and menu entries remain short and Russian; `/start` stays hidden.
+
+Minecraft must be running, with RCON enabled and the packaged `rcon-cli` working inside `mc`. The restricted helper executes only `docker exec mc rcon-cli whitelist list|add|remove`, with separately validated arguments and a bounded timeout. It uses Minecraft's existing RCON configuration: no bot-side password, published RCON port, shared data mount, or new GitHub secret is needed. Lifecycle and whitelist operations share a lock so they cannot race with a requested stop. Readiness checks remain independent.
+
+The helper recognizes standard English Vanilla/Paper whitelist responses, including already-listed/not-listed cases. It does not treat a zero CLI exit code as proof of a successful Minecraft command. Unexpected/plugin-modified responses fail without reporting success or forwarding raw diagnostics; inspect `/wl_list` before retrying a mutation whose result is uncertain. Changes use the server's native whitelist commands, which update its in-memory and persistent whitelist; the bot does not edit whitelist.json or calculate UUIDs itself.
+
+**Upgrade requirement:** manually install the updated host helper using [the whitelist upgrade procedure](docs/DEPLOYMENT.md#updating-the-helper-for-whitelist-commands) before deploying this bot version. An old helper will reject the new operations. Do not configure a conflicting startup `WHITELIST` source that overwrites runtime changes unless that behavior is intended.
+
+With `ONLINE_MODE=FALSE`, the whitelist does not authenticate account ownership. Use the player's exact nickname/case and check access from the intended client; no Telegram command changes that Minecraft identity model.
+
 ## CI/CD and VM deployment
 
 See [the deployment guide](docs/DEPLOYMENT.md) for the full manual setup: SSH access, Docker, a dedicated GitHub self-hosted runner, production secrets/variables, deployment, logs, and rollback. It assumes a private repository and a Linux VM with systemd.
@@ -91,7 +107,7 @@ The CI/CD workflow runs offline tests on GitHub-hosted runners with Python 3.12 
 
 Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` as a production environment variable. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
 
-Runtime secrets stay outside the checkout and image. The deployment validates configuration before replacing the service and checks process liveness afterward; verify actual Telegram connectivity with `/start` manually. RCON and whitelist administration are not implemented.
+Runtime secrets stay outside the checkout and image. The deployment validates configuration before replacing the service and checks process liveness afterward; verify actual Telegram connectivity with `/help` manually.
 
 ## Project structure
 
