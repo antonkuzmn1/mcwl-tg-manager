@@ -9,7 +9,7 @@ description = "Telegram bot for managing a Minecraft server whitelist"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {file = "LICENSE"}
-dependencies = []
+dependencies = ["aiogram>=3.31,<4"]
 
 [project.scripts]
 mcwl-tg-manager = "mcwl_tg_manager.__main__:main"

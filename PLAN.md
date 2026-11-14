@@ -11,9 +11,16 @@ This is the proposed roadmap, not authorization to implement all milestones. Imp
 
 Acceptance: the skeleton starts locally, documentation describes its limitations, and the working process is recorded in the repository.
 
-## 1. Configuration — planned
+## 0.1. Async Telegram starter — complete
 
-- Load the Telegram token, allowed user IDs, allowed chat IDs, and RCON connection settings from environment variables.
+Scope: implement an asynchronous aiogram bot with only /start and an English placeholder response. Read TELEGRAM_BOT_TOKEN from the process environment; do not add deployment infrastructure yet.
+
+Acceptance: /start responds in private and group chats, unrelated messages and commands are ignored, missing or malformed tokens fail without exposing secrets, and the HTTP session closes on shutdown or polling failure. Tests use mocks and do not contact Telegram. Document future runtime secret injection and single-instance VM deployment.
+
+## 1. Configuration — partially complete
+
+- [x] Load and validate the Telegram token from the process environment.
+- [ ] Add allowed user IDs, allowed chat IDs, and RCON connection settings when implementing privileged commands.
 - Validate required values and fail with actionable errors without revealing secrets.
 - Provide a placeholder-only .env.example and configuration documentation.
 
@@ -44,9 +51,12 @@ Acceptance: tests cover allowed and denied requests, malformed commands, and RCO
 
 Acceptance: image build and Compose validation pass where Docker is available. Live verification is performed only when requested and configured; unavailable checks are explicitly recorded.
 
-## 5. Automated checks — planned
+## 5. Automated checks and VM delivery — planned
 
 - Add CI for the automated tests and selected code-quality checks.
+- Agree on GitHub Actions, secret storage, and VM deployment details before implementation.
+- Inject the Telegram token into the runtime environment; do not embed secrets in source or images.
+- Run only one polling instance per token and stop the previous instance before replacement.
 - Document the commands used locally and in CI.
 
 Acceptance: CI runs without Telegram or Minecraft credentials and checks the same behavior as local tests.

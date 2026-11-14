@@ -6,7 +6,7 @@ Use English for all project content, including code, comments, documentation, co
 
 ## Project context
 
-This project will manage a Minecraft server whitelist from Telegram through RCON. Only the Python skeleton exists today. Read README.md for setup, PLAN.md for milestones, and HANDOFF.md for current state before starting work.
+This project will manage a Minecraft server whitelist from Telegram through RCON. An asynchronous aiogram bot currently responds only to /start; whitelist management is not implemented. Read README.md for setup, PLAN.md for milestones, and HANDOFF.md for current state before starting work.
 
 ## Workflow
 
@@ -27,11 +27,11 @@ This project will manage a Minecraft server whitelist from Telegram through RCON
 
 ## Checks
 
-The current skeleton can be checked with `PYTHONPATH=src python3 -m mcwl_tg_manager` and `git diff --check`. There is no automated test suite or CI yet. Document new test commands here when they become available. Documentation-only changes require link/content checks and `git diff --check`; application tests are unnecessary unless behavior changes.
+Install the locked environment with `uv sync --locked`. Run offline tests with `uv run --locked python -m unittest discover -s tests -v` and check whitespace with `git diff --check`. CI is not implemented yet. Do not start the bot during verification without explicit authorization to contact Telegram. Documentation-only changes require link/content checks and `git diff --check`; application tests are unnecessary unless behavior changes.
 
 ## Implementation boundaries
 
 - Never commit credentials, Telegram tokens, RCON passwords, or real deployment secrets.
-- Keep Telegram authorization explicit and deny access by default when implementing commands.
+- The public /start placeholder requires no authorization. Future privileged commands must use explicit authorization and deny access by default.
 - Expose only the intended whitelist operations; do not add arbitrary remote console execution.
 - Do not push, deploy, or contact live Telegram/Minecraft services unless requested.
