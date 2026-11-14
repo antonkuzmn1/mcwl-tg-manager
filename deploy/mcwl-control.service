@@ -1,0 +1,24 @@
+[Unit]
+Description=Restricted Minecraft container lifecycle helper
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+User=github-runner
+Group=mcwl-control
+SupplementaryGroups=docker
+StateDirectory=mcwl-control
+StateDirectoryMode=0750
+ExecStart=/usr/bin/python3 /opt/mcwl-control/server_control.py
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=180
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

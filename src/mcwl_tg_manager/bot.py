@@ -1,11 +1,12 @@
-"""Asynchronous Telegram application and its initial command handler."""
+"""Asynchronous Telegram application and authorized command handlers."""
 
 from aiogram import Bot, Dispatcher, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import Message
 
 from mcwl_tg_manager.config import Settings
 from mcwl_tg_manager.middleware import AllowedChatsMiddleware
+from mcwl_tg_manager.server import ServerController, ServerControlError
 
 START_MESSAGE = "Hello! Minecraft whitelist management is coming soon."
 
@@ -14,9 +15,33 @@ async def handle_start(message: Message) -> None:
     await message.answer(START_MESSAGE)
 
 
-def create_dispatcher(allowed_chat_ids: frozenset[int]) -> Dispatcher:
+def create_dispatcher(
+    allowed_chat_ids: frozenset[int],
+    admin_user_ids: frozenset[int] = frozenset(),
+    controller: ServerController | None = None,
+) -> Dispatcher:
+    server = controller if controller is not None else ServerController()
+
+    async def handle_server(message: Message, command: CommandObject) -> None:
+        sender = message.from_user
+        if message.sender_chat is not None or sender is None or sender.is_bot or sender.id not in admin_user_ids:
+            await message.answer("You are not authorized to control the server.")
+            return
+        if command.args:
+            await message.answer(f"Usage: /{command.command}")
+            return
+        action = "start" if command.command == "server_start" else "stop"
+        await message.answer("Starting server container..." if action == "start" else "Stopping server container...")
+        try:
+            result = await server.change_state(action)
+        except ServerControlError as error:
+            await message.answer(str(error))
+            return
+        await message.answer(result)
+
     router = Router(name="start")
     router.message.register(handle_start, CommandStart())
+    router.message.register(handle_server, Command("server_start", "server_stop"))
     dispatcher = Dispatcher()
     dispatcher.message.outer_middleware(AllowedChatsMiddleware(allowed_chat_ids))
     dispatcher.include_router(router)
@@ -24,7 +49,7 @@ def create_dispatcher(allowed_chat_ids: frozenset[int]) -> Dispatcher:
 
 
 async def run(settings: Settings) -> None:
-    dispatcher = create_dispatcher(settings.allowed_chat_ids)
+    dispatcher = create_dispatcher(settings.allowed_chat_ids, settings.admin_user_ids)
     async with Bot(token=settings.telegram_bot_token) as bot:
         await dispatcher.start_polling(
             bot,

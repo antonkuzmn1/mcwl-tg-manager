@@ -5,6 +5,15 @@ services:
     env_file:
       - path: ${BOT_ENV_FILE:?BOT_ENV_FILE must be set}
         format: raw
+    volumes:
+      - type: bind
+        source: /var/lib/mcwl-control
+        target: /var/lib/mcwl-control
+        read_only: true
+        bind:
+          create_host_path: false
+    group_add:
+      - ${CONTROL_GID:?CONTROL_GID must match the host control socket group}
     init: true
     restart: unless-stopped
     stop_grace_period: 30s

@@ -114,6 +114,46 @@ cd /home/github-runner/actions-runner
 exit
 ```
 
+## 5a. Install the restricted server control helper
+
+Complete this step before deploying this version. The bot must not receive the host Docker API socket. Instead, it connects to a narrow Unix-socket helper whose only operations are start and stop for the existing container `mc`. The helper uses the existing runner account's Docker access; its Python script and systemd unit are installed as root-owned files. No new TCP port is opened.
+
+From the local project root on your own computer, upload the two setup files using your existing SSH key:
+
+```sh
+ssh -i ~/.ssh/YOUR_VM_KEY YOUR_ADMIN_USER@YOUR_VM_IP 'mkdir -p ~/mcwl-control-setup'
+scp -i ~/.ssh/YOUR_VM_KEY deploy/server_control.py deploy/mcwl-control.service YOUR_ADMIN_USER@YOUR_VM_IP:mcwl-control-setup/
+```
+
+On the VM, as your administrator:
+
+```sh
+getent group mcwl-control >/dev/null || sudo groupadd --system mcwl-control
+sudo install -d -o root -g root -m 755 /opt/mcwl-control
+sudo install -o root -g root -m 755 ~/mcwl-control-setup/server_control.py /opt/mcwl-control/server_control.py
+sudo install -o root -g root -m 644 ~/mcwl-control-setup/mcwl-control.service /etc/systemd/system/mcwl-control.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now mcwl-control
+sudo systemctl status mcwl-control --no-pager
+sudo stat -c '%a %U %G' /var/lib/mcwl-control/control.sock
+```
+
+The socket should be mode `660` with group `mcwl-control`. The state directory should be mode `750`. It persists across service restarts and reboots, so the bot's directory bind mount remains valid when the helper replaces its socket. The bot remains non-root; Compose adds this group as a supplementary group using `CONTROL_GID`, which the deploy script detects from the directory. Do not change socket permissions to `666` and do not mount `/var/run/docker.sock` into the bot.
+
+The helper expects `/usr/bin/docker` and the normal rootful socket `/var/run/docker.sock`. A rootless Docker installation or a different Docker binary/socket path requires an explicit operator-reviewed helper adjustment. Python 3.10+ is sufficient for the host helper; it uses only the standard library. No bot token is supplied to it.
+
+Make sure the Minecraft container exists on this same VM as `mc`. From its existing Compose directory, create it once if needed:
+
+```sh
+docker compose up -d mc
+```
+
+Do not run that command in the bot deployment directory. The helper cannot create or remove containers; `docker compose down` removes `mc` and requires manual creation again. The bot can start it after a normal stop. Add `stop_grace_period: 120s` to the Minecraft service if you also want a longer shutdown grace period for manual Compose stops; the helper passes its own 120-second Docker timeout.
+
+Before deployment, add your numeric user ID to TELEGRAM_ADMIN_USER_IDS in GitHub (step 6). After deployment, try `/server_start` or `/server_stop` in an allowed chat. Start means that Docker started the container, not that Minecraft finished loading. Stop allows graceful shutdown for up to 120 seconds, after which Docker can force termination. Only one operation runs at a time; after a timeout the daemon may still finish the operation, so inspect state before trying again.
+
+When a future change modifies the host helper or unit, reinstall the reviewed files using the commands above and run `sudo systemctl restart mcwl-control`. Ordinary bot deployments do not overwrite the root-owned helper or restart Minecraft. Inspect helper logs privately using `sudo journalctl -u mcwl-control -n 100 --no-pager`.
+
 ## 6. Add secrets and variables
 
 Preferred location: **Repository Settings → Environments → production**.
@@ -122,10 +162,11 @@ Preferred location: **Repository Settings → Environments → production**.
 | --- | --- | --- |
 | Environment secret | `TELEGRAM_BOT_TOKEN` | The complete bot token issued by BotFather |
 | Environment variable | `TELEGRAM_ALLOWED_CHAT_IDS` | Comma-separated numeric chat IDs, such as `-1001234567890,-987654321` |
+| Environment variable | `TELEGRAM_ADMIN_USER_IDS` | Positive numeric user IDs allowed to start/stop mc; empty disables these commands |
 
-Use **Add environment secret** for the token and the **Environment variables** section for the chat list. Enter values without surrounding quotes. The chat list is configuration, not a credential.
+Use **Add environment secret** for the token and the **Environment variables** section for the chat list and administrator user IDs. Enter values without surrounding quotes. The chat list is configuration, not a credential.
 
-Fallback for plans without environment secrets: **Settings → Secrets and variables → Actions → Secrets → New repository secret** for the token, and the **Variables → New repository variable** tab for the chat list. Avoid duplicate values at different scopes to prevent confusion; environment values take precedence when present.
+Fallback for plans without environment secrets: **Settings → Secrets and variables → Actions → Secrets → New repository secret** for the token, and the **Variables → New repository variable** tab for the chat list and administrator user IDs. Avoid duplicate values at different scopes to prevent confusion; environment values take precedence when present.
 
 No `SSH_PRIVATE_KEY`, VM password, `SSH_HOST`, Docker registry password, or PAT is needed. The runner registration handles GitHub connectivity; the workflow's built-in `GITHUB_TOKEN` checks out the repository. The image is built on the VM.
 
@@ -158,6 +199,7 @@ sudo -iu github-runner
 cd ~/apps/mcwl-tg-manager
 export MCWL_IMAGE="$(cat current-image)"
 export BOT_ENV_FILE="$PWD/bot.env"
+export CONTROL_GID="$(stat -c '%g' /var/lib/mcwl-control)"
 docker compose -f compose.yml ps
 docker compose -f compose.yml logs --tail=100 bot
 ```
@@ -184,6 +226,7 @@ exec 9>deploy.lock
 flock -w 120 9
 export MCWL_IMAGE="$(cat previous-image)"
 export BOT_ENV_FILE="$PWD/previous-bot.env"
+export CONTROL_GID="$(stat -c '%g' /var/lib/mcwl-control)"
 docker compose -f previous-compose.yml up -d --wait --wait-timeout 60
 cp previous-compose.yml compose.yml
 cp previous-bot.env bot.env
@@ -203,6 +246,7 @@ After a rollback, a new push/manual run on main deploys main again. Revert the p
 - **Runner is offline:** open a root shell with `sudo -i`, enter the runner install directory, and check `./svc.sh status` and outbound connectivity. Runner diagnostics are in its `_diag` directory.
 - **Docker permission denied:** check runner group membership and restart the runner service after changing it.
 - **Empty configuration:** confirm exact secret/variable names, the production scope, and that values are not surrounded by quotes. A variable accidentally saved as a secret is not available through `vars`.
+- **Server control unavailable:** install/start `mcwl-control`, check its socket directory group and permissions, and confirm container `mc` exists. If commands are denied, set `TELEGRAM_ADMIN_USER_IDS` and redeploy; use a personal account rather than anonymous administrator mode.
 - **Token invalid or bot silent:** inspect logs privately, check BotFather credentials and Telegram connectivity, and make sure the bot is present in the allowed chat. Numeric IDs must match the current chat ID; migrating to a supergroup can change it.
 - **Telegram conflict:** another polling process or webhook is active for the same bot. Stop the duplicate or disable the webhook.
 - **CI succeeded but deployment failed:** open the deploy job, then inspect the service over SSH. Successful tests do not configure the runner, Docker, or secrets for you.

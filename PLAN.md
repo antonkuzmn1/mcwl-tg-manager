@@ -23,11 +23,18 @@ Scope: require TELEGRAM_ALLOWED_CHAT_IDS as a comma-separated list of signed Tel
 
 Acceptance: configured private, group, and supergroup chats receive replies; other chats are silently ignored before handlers run. Missing, empty, malformed, zero, or out-of-range IDs prevent startup. Whitespace and duplicate IDs are supported. Tests run without Telegram access.
 
+## 0.3. Server lifecycle commands — complete; host setup pending
+
+Scope: add /server_start and /server_stop for the existing Docker container named mc. Require both an allowed chat and an explicitly configured TELEGRAM_ADMIN_USER_IDS sender. Empty admin configuration disables privileged commands. Use an asynchronous client for a restricted host helper with only two fixed Docker CLI operations; never accept container names or arbitrary commands from Telegram.
+
+Acceptance: offline tests cover allowed/denied/anonymous senders, malformed commands, successful/idempotent start/stop, missing container, API errors, connection failure, timeout, and concurrent requests. Stop grants a 120-second graceful shutdown window. Deployment passes administrator IDs and the restricted control socket group, documents host-helper setup and the socket privilege boundary, and does not operate a real Minecraft container during verification.
+
 ## 1. Configuration — partially complete
 
 - [x] Load and validate the Telegram token from the process environment.
 - [x] Load and validate allowed chat IDs; enforce the allowlist before message handlers run.
-- [ ] Add allowed user IDs and RCON connection settings when implementing privileged commands.
+- [x] Add explicit administrator user IDs for privileged server lifecycle commands.
+- [ ] Add RCON connection settings when implementing whitelist commands.
 - Validate required values and fail with actionable errors without revealing secrets.
 - Provide a placeholder-only .env.example and configuration documentation.
 

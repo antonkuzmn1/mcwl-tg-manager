@@ -38,6 +38,18 @@ class ConfigurationTests(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "TELEGRAM_ALLOWED_CHAT_IDS"):
                         Settings.from_env()
 
+    def test_admin_ids_are_optional_and_validated(self):
+        base = {"TELEGRAM_BOT_TOKEN": TOKEN, "TELEGRAM_ALLOWED_CHAT_IDS": "42"}
+        with patch.dict(os.environ, base, clear=True):
+            self.assertEqual(Settings.from_env().admin_user_ids, frozenset())
+        with patch.dict(os.environ, dict(base, TELEGRAM_ADMIN_USER_IDS=" 42, 99, 42 "), clear=True):
+            self.assertEqual(Settings.from_env().admin_user_ids, frozenset({42, 99}))
+        for value in ("-42", "0", "42,", "abc", "1.5", "4503599627370496"):
+            with self.subTest(value=value):
+                with patch.dict(os.environ, dict(base, TELEGRAM_ADMIN_USER_IDS=value), clear=True):
+                    with self.assertRaisesRegex(ValueError, "TELEGRAM_ADMIN_USER_IDS"):
+                        Settings.from_env()
+
     def test_missing_empty_and_invalid_tokens_fail_without_leaking(self):
         for token in ("", "   ", "secret-invalid-token"):
             with self.subTest(token=token):

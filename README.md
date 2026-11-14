@@ -1,10 +1,10 @@
 # mcwl-tg-manager
 
-An asynchronous Telegram bot built with aiogram. Currently, only `/start` is implemented:
+An asynchronous Telegram bot built with aiogram. `/start` responds with the placeholder:
 
 > Hello! Minecraft whitelist management is coming soon.
 
-The command works in private and group chats, including `/start@YourBotUsername`. Other messages and commands are ignored. The placeholder is available only in explicitly allowed chats; there are no privileged operations or Minecraft connections yet.
+The command works in private and group chats, including `/start@YourBotUsername`. Other messages and unknown commands are ignored. All commands require an allowed chat. Administrators can also start and stop the existing Minecraft container using the commands below.
 
 ## AI disclosure
 
@@ -51,7 +51,7 @@ Use numeric Telegram chat IDs, not usernames or invite links. Group and supergro
 
 Spaces around IDs and duplicates are accepted. Missing, empty, malformed, zero, or out-of-range values stop startup. Messages from other chats are silently discarded before command handlers run, including `/start` in private chats. The restriction covers all message handlers; new update types must receive equivalent access control before being enabled. Group-to-supergroup migration changes the chat ID, so update the allowlist and restart the bot when needed. Changes to the environment take effect after restart.
 
-The allowlist controls chats, not individual members: any member of an allowed chat can use the placeholder. User-level authorization for future administrative commands is still pending.
+The allowlist controls chats, not individual members: any member of an allowed chat can use the placeholder. Server start/stop additionally requires an explicit user ID from `TELEGRAM_ADMIN_USER_IDS`; whitelist administration is still pending.
 
 The bot uses long polling and needs outbound access to Telegram; no inbound HTTP port is required. Disable any existing webhook for this bot before using polling. Stop with Ctrl+C or SIGTERM; the HTTP session is closed on shutdown. Run only one polling process per token.
 
@@ -64,13 +64,30 @@ git diff --check
 
 Tests use synthetic updates and mocked Telegram requests. They do not need real credentials or a running Minecraft server.
 
+## Server lifecycle commands
+
+- `/server_start`: start the existing Docker container named `mc`.
+- `/server_stop`: stop `mc`, giving it up to 120 seconds for graceful shutdown before Docker may force termination.
+
+Both support `@YourBotUsername` in groups and accept no arguments. Only senders listed in the comma-separated `TELEGRAM_ADMIN_USER_IDS` variable can use them, and only inside allowed chats. Missing/empty admin IDs disable server control. Anonymous administrators, messages sent as a chat, and bots cannot use these commands. Chat membership or Telegram's administrator role alone does not grant permission.
+
+```sh
+export TELEGRAM_ADMIN_USER_IDS="123456789,987654321"
+```
+
+The bot talks asynchronously to a host helper over `/var/lib/mcwl-control/control.sock`. The helper accepts only start/stop for `mc`; the bot has no access to the Docker API socket, arbitrary shell commands, container creation/removal, or other containers. Install the helper using [the deployment guide](docs/DEPLOYMENT.md#5a-install-the-restricted-server-control-helper) before deploying this version. The bot container needs the helper directory bind mount and its group ID; the deployment script detects the group automatically.
+
+The Minecraft container must already exist on the same VM under the exact name `mc`. Create it once using your existing Compose file (`docker compose up -d mc`). The bot can start a stopped container, but cannot recreate one removed with `docker compose down`. A successful start confirms only container startup, not Minecraft readiness. Repeated requests report an already-running/stopped state; overlapping operations are rejected. Docker failures and timeouts produce operator-facing messages.
+
+No RCON connection is required for these commands. Your Minecraft Compose file can stay as shown; optionally add `stop_grace_period: 120s` under `mc` for a similar grace period when stopping it manually through Compose. Docker's `unless-stopped` policy respects an explicit stop until the container is started again.
+
 ## CI/CD and VM deployment
 
 See [the deployment guide](docs/DEPLOYMENT.md) for the full manual setup: SSH access, Docker, a dedicated GitHub self-hosted runner, production secrets/variables, deployment, logs, and rollback. It assumes a private repository and a Linux VM with systemd.
 
 The CI/CD workflow runs offline tests on GitHub-hosted runners with Python 3.12 and 3.14. After both pass, main pushes or main-only manual runs build and deploy a Docker image on the production runner. PRs do not deploy. Workflow actions and container base images are pinned to immutable revisions/digests.
 
-Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` as a production environment variable. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
+Set `TELEGRAM_BOT_TOKEN` as a GitHub production environment secret and `TELEGRAM_ALLOWED_CHAT_IDS` plus `TELEGRAM_ADMIN_USER_IDS` as production environment variables. Repository-level values are an alternative if your GitHub plan does not support private environment secrets; the guide explains the environment configuration adjustment. SSH keys are not required in GitHub: the runner connects outbound from the VM.
 
 Runtime secrets stay outside the checkout and image. The deployment validates configuration before replacing the service and checks process liveness afterward; verify actual Telegram connectivity with `/start` manually. RCON and whitelist administration are not implemented.
 
