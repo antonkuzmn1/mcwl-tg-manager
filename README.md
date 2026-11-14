@@ -33,3 +33,11 @@ mcwl-tg-manager
 
 - `src/mcwl_tg_manager/` — application package and entry point.
 - `pyproject.toml` — package configuration; no external dependencies yet.
+
+## Development workflow
+
+- [AGENTS.md](AGENTS.md): development rules and verification requirements.
+- [PLAN.md](PLAN.md): proposed milestones and acceptance criteria.
+- [HANDOFF.md](HANDOFF.md): current state, verification, and the next step.
+
+Work proceeds in small tasks: define acceptance criteria, implement, verify, update the documents, and create a Conventional Commit. Planned milestones are implemented only when requested.
