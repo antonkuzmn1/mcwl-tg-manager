@@ -4,6 +4,10 @@ A Telegram bot project for managing a Minecraft server whitelist through RCON.
 
 Only the Python project skeleton is currently implemented. Telegram and Minecraft connections have not been added yet.
 
+## AI disclosure
+
+The code in this repository was written by OpenAI Codex under the project owner's direction. The project owner did not write the code manually.
+
 ## Requirements
 
 Python 3.12 or newer.
